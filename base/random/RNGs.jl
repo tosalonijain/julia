@@ -60,24 +60,25 @@ srand(rng::RandomDevice) = rng
 
 ## MersenneTwister
 
-const MTCacheLength = dsfmt_get_min_array_size()
+const MT_CACHE_F = dsfmt_get_min_array_size()
 
 mutable struct MersenneTwister <: AbstractRNG
     seed::Vector{UInt32}
     state::DSFMT_state
     vals::Vector{Float64}
-    idx::Int
-
-    function MersenneTwister(seed, state, vals, idx)
-        length(vals) == MTCacheLength && 0 <= idx <= MTCacheLength ||
-            throw(DomainError((length(vals), idx),
-                      "`length(vals)` and `idx` must be consistent with $MTCacheLength"))
-        new(seed, state, vals, idx)
+    idxF::Int
+    function MersenneTwister(seed, state, vals, idxF)
+        length(vals) == MT_CACHE_F && 0 <= idxF <= MT_CACHE_F ||
+            throw(DomainError((length(vals), idxF),
+                      "`length(vals)` and `idxF` must be consistent with $MT_CACHE_F"))
+        new(seed, state, vals, idxF)
     end
 end
 
 MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
-    MersenneTwister(seed, state, zeros(Float64, MTCacheLength), MTCacheLength)
+    MersenneTwister(seed, state,
+                    Vector{Float64}(uninitialized, MT_CACHE_F),
+                    MT_CACHE_F)
 
 """
     MersenneTwister(seed)
@@ -120,27 +121,47 @@ function copy!(dst::MersenneTwister, src::MersenneTwister)
     copy!(resize!(dst.seed, length(src.seed)), src.seed)
     copy!(dst.state, src.state)
     copy!(dst.vals, src.vals)
-    dst.idx = src.idx
+    dst.idxF = src.idxF
     dst
 end
 
 copy(src::MersenneTwister) =
-    MersenneTwister(copy(src.seed), copy(src.state), copy(src.vals), src.idx)
+    MersenneTwister(copy(src.seed), copy(src.state), copy(src.vals),
+                    src.idxF)
+
 
 ==(r1::MersenneTwister, r2::MersenneTwister) =
-    r1.seed == r2.seed && r1.state == r2.state && isequal(r1.vals, r2.vals) &&
-    r1.idx == r2.idx
+    r1.seed == r2.seed && r1.state == r2.state &&
+    isequal(r1.vals, r2.vals) &&
+    r1.idxF == r2.idxF
 
-hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.idx))
+hash(r::MersenneTwister, h::UInt) =
+    foldr(hash, h, (r.seed, r.state, r.vals, r.idxF))
+
+
+### Wrapper which caches generated integers
+
+const MT_CACHE_I = 375 << 4
+
+mutable struct IntCached{S,R<:AbstractRNG} <: AbstractRNG
+    rng::R
+    ints::Vector{UInt128}
+    idxI::Int
+
+    IntCached{C}(rng::R) where {C,R<:AbstractRNG} =
+        new{C << 4, R}(rng, Vector{UInt128}(uninitialized, C), 0)
+end
 
 
 ### low level API
 
-mt_avail(r::MersenneTwister) = MTCacheLength - r.idx
-mt_empty(r::MersenneTwister) = r.idx == MTCacheLength
-mt_setfull!(r::MersenneTwister) = r.idx = 0
-mt_setempty!(r::MersenneTwister) = r.idx = MTCacheLength
-mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idx+=1]
+#### floats
+
+mt_avail(r::MersenneTwister) = MT_CACHE_F - r.idxF
+mt_empty(r::MersenneTwister) = r.idxF == MT_CACHE_F
+mt_setfull!(r::MersenneTwister) = r.idxF = 0
+mt_setempty!(r::MersenneTwister) = r.idxF = MT_CACHE_F
+mt_pop!(r::MersenneTwister) = @inbounds return r.vals[r.idxF+=1]
 
 function gen_rand(r::MersenneTwister)
     @gc_preserve r dsfmt_fill_array_close1_open2!(r.state, pointer(r.vals), length(r.vals))
@@ -149,9 +170,58 @@ end
 
 reserve_1(r::MersenneTwister) = (mt_empty(r) && gen_rand(r); nothing)
 # `reserve` allows one to call `rand_inbounds` n times
-# precondition: n <= MTCacheLength
+# precondition: n <= MT_CACHE_F
 reserve(r::MersenneTwister, n::Int) = (mt_avail(r) < n && gen_rand(r); nothing)
 
+#### ints
+
+logsizeof(::Type{<:Union{Bool,Int8,UInt8}}) = 0
+logsizeof(::Type{<:Union{Int16,UInt16}}) = 1
+logsizeof(::Type{<:Union{Int32,UInt32}}) = 2
+logsizeof(::Type{<:Union{Int64,UInt64}}) = 3
+logsizeof(::Type{<:Union{Int128,UInt128}}) = 4
+
+_shift0(::Type{<:Union{Bool,Int8,UInt8}}) = 15
+_shift0(::Type{<:Union{Int16,UInt16}}) = 7
+_shift0(::Type{<:Union{Int32,UInt32}}) = 3
+_shift0(::Type{<:Union{Int64,UInt64}}) = 1
+_shift0(::Type{<:Union{Int128,UInt128}}) = 0
+
+
+mt_avail(r::IntCached, ::Type{T}) where T = r.idxI >> logsizeof(T)
+
+function mt_setfull_I!(r::IntCached{S}) where S
+    rand!(r.rng, r.ints)
+    r.idxI = S
+end
+
+function reserve1(r::IntCached, ::Type{T}) where T
+    r.idxI < sizeof(T) && mt_setfull_I!(r)
+    nothing
+end
+
+function mt_next_idx(r::IntCached, ::Type{T}) where {T}
+    avail = mt_avail(r, T)
+    avail == 0 ?
+        mt_setfull_I!(r) >> logsizeof(T) : # constant
+        avail
+end
+
+function mt_pop!(r::IntCached, ::Type{T}) where {T}
+    reserve1(r, T)
+    i = r.idxI-1
+    r.idxI -= sizeof(T)
+    @inbounds res128 = r.ints[1 + i >> 4]
+    i128 = i & _shift0(T) # 0-based "indice" in res128
+    (res128 >> (i128 << (sizeof(T)<<3))) % T
+end
+
+function mt_pop!(r::MersenneTwister, ::Type{T}) where {T<:Union{Int128,UInt128}}
+    reserve1(r, T)
+    @inbounds res = r.ints[r.idxI >> 4]
+    r.idxI -= 16
+    res
+end
 
 ### seeding
 
@@ -243,6 +313,8 @@ rand(r::MersenneTwister, sp::SamplerTrivial{Close1Open2_64}) =
 
 #### integers
 
+rand(r::IntCached, T::SamplerBoolBitInteger) = mt_pop!(r, T[])
+
 rand(r::MersenneTwister,
      T::SamplerUnion(Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32})) =
          rand(r, UInt52Raw()) % T[]
@@ -315,13 +387,13 @@ function _rand_max383!(r::MersenneTwister, A::UnsafeView{Float64}, I::FloatInter
     mt_avail(r) == 0 && gen_rand(r)
     # from now on, at most one call to gen_rand(r) will be necessary
     m = min(n, mt_avail(r))
-    @gc_preserve r unsafe_copy!(A.ptr, pointer(r.vals, r.idx+1), m)
+    @gc_preserve r unsafe_copy!(A.ptr, pointer(r.vals, r.idxF+1), m)
     if m == n
-        r.idx += m
+        r.idxF += m
     else # m < n
         gen_rand(r)
         @gc_preserve r unsafe_copy!(A.ptr+m*sizeof(Float64), pointer(r.vals), n-m)
-        r.idx = n-m
+        r.idxF = n-m
     end
     if I isa CloseOpen
         for i=1:n
