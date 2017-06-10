@@ -207,6 +207,9 @@ if !isdefined(Core, :Inference)
     Core.atdoc!(CoreDocs.docm)
 end
 
+# Some type
+include("some.jl")
+
 include("dict.jl")
 include("set.jl")
 include("iterators.jl")
@@ -258,9 +261,6 @@ using .Cartesian
 include("multidimensional.jl")
 include("permuteddimsarray.jl")
 using .PermutedDimsArrays
-
-# Some type
-include("some.jl")
 
 include("broadcast.jl")
 using .Broadcast
