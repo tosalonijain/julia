@@ -804,6 +804,10 @@ Deprecated or removed
 
   * `sub2ind` and `ind2sub` are deprecated in favor of using `CartesianIndices` and `LinearIndices` ([#24715]).
 
+  * `search` and `rsearch` have been deprecated in favor of `findfirst`/`findnext` and
+    `findlast`/`findprev` respectively, in combination with the new `equalto` and `occursin`
+    predicates for some methods ([#24673]).
+
 Command-line option changes
 ---------------------------
 
@@ -1784,3 +1788,4 @@ Command-line option changes
 [#24869]: https://github.com/JuliaLang/julia/issues/24869
 [#25021]: https://github.com/JuliaLang/julia/issues/25021
 [#25088]: https://github.com/JuliaLang/julia/issues/25088
+[#24684]: https://github.com/JuliaLang/julia/issues/24684
