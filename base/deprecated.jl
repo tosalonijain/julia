@@ -3419,6 +3419,10 @@ end
 # PR #25113
 @deprecate_binding CartesianRange CartesianIndices
 
+# PR 25062
+@deprecate(link_pipe(pipe; julia_only_read = true, julia_only_write = true),
+           link_pipe!(pipe, reader_supports_async = julia_only_read, writer_supports_async = julia_only_write))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
