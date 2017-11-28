@@ -1405,7 +1405,8 @@ Deprecated or removed
 
   * `EnvHash` has been renamed to `EnvDict` ([#24167]).
 
-  * `linspace` and `logspace` now require an explicit number of elements to be supplied rather than defaulting to `50`.
+  * `linspace` and `logspace` now require an explicit number of elements to be supplied rather
+     than defaulting to `50` ([#24794], [#24805]).
 
   * Introduced the `empty` function, the functional pair to `empty!` which returns a new,
     empty container ([#24390]).
