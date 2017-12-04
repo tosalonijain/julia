@@ -182,6 +182,32 @@ rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
 
 
+#### dicts
+
+rand!(A::Associative{K,V}, dist::Distribution{Pair} = Distribution(Pair, K, V)) where {K,V} =
+    rand!(GLOBAL_RNG, A, dist)
+
+rand!(rng::AbstractRNG, A::Associative{K,V},
+      dist::Distribution{Pair} = Distribution(Pair, K, V)) where {K,V} =
+          rand!(GLOBAL_RNG, A, Sampler(rng, dist))
+
+function _rand!(rng::AbstractRNG, A::Associative{K,V}, n::Integer, sp::Sampler) where {K,V}
+    empty!(A)
+    while length(A) < n
+        push!(A, rand(rng, sp))
+    end
+    A
+end
+
+rand!(rng::AbstractRNG, A::Associative{K,V}, sp::Sampler) where {K,V} = _rand!(rng, A, length(A), sp)
+
+# TODO: what to do when e.g. T==Dict ? we could infer the K,V types from u, instead
+# of creating Dict(), i.e. Dict{Any,Any}()
+rand(rng::AbstractRNG, dist::Distribution{Pair}, ::Type{T}, n::Integer) where {T<:Associative} =
+    _rand!(rng, T(), n, Sampler(rng, dist))
+
+rand(u::Distribution{Pair}, ::Type{T}, n::Integer) where {T<:Associative} = rand(GLOBAL_RNG, u, T, n)
+
 ## __init__ & include
 
 function __init__()
