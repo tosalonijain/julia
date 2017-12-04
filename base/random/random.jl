@@ -217,6 +217,38 @@ rand(rng::AbstractRNG, dist::Distribution{Pair}, ::Type{T}, n::Integer) where {T
 
 rand(u::Distribution{Pair}, ::Type{T}, n::Integer) where {T<:Associative} = rand(GLOBAL_RNG, u, T, n)
 
+
+#### sets
+
+rand!(A::AbstractSet{T}, X) where {T} = rand!(GLOBAL_RNG, A, X)
+rand!(A::AbstractSet{T}, ::Type{X}=T) where {T,X} = rand!(GLOBAL_RNG, A, X)
+
+rand!(rng::AbstractRNG, A::AbstractSet, X) = rand!(rng, A, Sampler(rng, X))
+rand!(rng::AbstractRNG, A::AbstractSet{T}, ::Type{X}=T) where {T,X} = rand!(rng, A, Sampler(rng, X))
+
+_rand!(rng::AbstractRNG, A::AbstractSet, n::Integer, X) = _rand!(rng, A, n, Sampler(rng, X))
+
+function _rand!(rng::AbstractRNG, A::AbstractSet{T}, n::Integer, sp::Sampler) where T
+    empty!(A)
+    while length(A) < n
+        push!(A, rand(rng, sp))
+    end
+    A
+end
+
+rand!(rng::AbstractRNG, A::AbstractSet, sp::Sampler) = _rand!(rng, A, length(A), sp)
+
+
+rand(r::AbstractRNG, ::Type{T}, n::Integer) where {T<:AbstractSet} = rand(r, Float64, T, n)
+rand(                ::Type{T}, n::Integer) where {T<:AbstractSet} = rand(GLOBAL_RNG, T, n)
+
+rand(r::AbstractRNG, X, ::Type{T}, n::Integer) where {T<:AbstractSet} = _rand!(r, T{eltype(X)}(), n, X)
+rand(                X, ::Type{T}, n::Integer) where {T<:AbstractSet} = rand(GLOBAL_RNG, X, T, n)
+
+rand(r::AbstractRNG, ::Type{X}, ::Type{T}, n::Integer) where {X,T<:AbstractSet} = _rand!(r, T{X}(), n, X)
+rand(                ::Type{X}, ::Type{T}, n::Integer) where {X,T<:AbstractSet} = rand(GLOBAL_RNG, X, T, n)
+
+
 ## __init__ & include
 
 function __init__()
