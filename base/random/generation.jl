@@ -40,7 +40,7 @@ rand_generic(r::AbstractRNG, ::CloseOpen_64) = rand(r, Close1Open2()) - 1.0
 const bits_in_Limb = sizeof(Limb) << 3
 const Limb_high_bit = one(Limb) << (bits_in_Limb-1)
 
-struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler
+struct SamplerBigFloat{I<:FloatInterval{BigFloat}} <: Sampler{BigFloat}
     prec::Int
     nlimbs::Int
     limbs::Vector{Limb}
@@ -109,13 +109,17 @@ rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 
 ### sampler for pairs and complex numbers
 
-function Sampler(rng::AbstractRNG, u::Distribution2{T}, n::Repetition) where T<:Union{Pair,Complex}
+function Sampler(rng::AbstractRNG, u::Distribution2{T}, n::Repetition) where T <: Union{Complex,Pair}
+    @assert T === Complex || T === Pair
     sp1 = Sampler(rng, u.x, n)
     sp2 = u.x == u.y ? sp1 : Sampler(rng, u.y, n)
-    SamplerTag{T}((sp1, sp2))
+    SamplerTag{Cont{T === Complex ?
+                    Complex{eltype(sp1)} :
+                    Pair{eltype(sp1),eltype(sp2)}
+                    }}((sp1, sp2))
 end
 
-rand(rng::AbstractRNG, sp::SamplerTag{T}) where {T<:Union{Complex,Pair}} =
+rand(rng::AbstractRNG, sp::SamplerTag{Cont{T}}) where {T<:Union{Complex,Pair}} =
     T(rand(rng, sp.data[1]), rand(rng, sp.data[2]))
 
 #### additional methods for complex numbers
@@ -154,7 +158,7 @@ maxmultiplemix(k::UInt64) = k >> 32 != 0 ?
     maxmultiple(k) :
     (div(0x0000000100000000, k + (k == 0))*k - oneunit(k))::UInt64
 
-struct SamplerRangeInt{T<:Integer,U<:Unsigned} <: Sampler
+struct SamplerRangeInt{T<:Integer,U<:Unsigned} <: Sampler{T}
     a::T   # first element of the range
     k::U   # range length or zero for full range
     u::U   # rejection threshold
@@ -212,7 +216,7 @@ end
 
 ### BigInt
 
-struct SamplerBigInt <: Sampler
+struct SamplerBigInt <: Sampler{BigInt}
     a::BigInt         # first
     m::BigInt         # range length - 1
     nlimbs::Int       # number of limbs in generated BigInt's (z ∈ [0, m])
@@ -276,9 +280,10 @@ end
 
 ## random values from Set
 
-Sampler(rng::AbstractRNG, t::Set, n::Repetition) = SamplerTag{Set}(Sampler(rng, t.dict, n))
+Sampler(rng::AbstractRNG, t::Set{T}, n::Repetition) where {T} =
+    SamplerTag{Set{T}}(Sampler(rng, t.dict, n))
 
-rand(rng::AbstractRNG, sp::SamplerTag{Set,<:Sampler}) = rand(rng, sp.data).first
+rand(rng::AbstractRNG, sp::SamplerTag{<:Set,<:Sampler}) = rand(rng, sp.data).first
 
 ## random values from BitSet
 

@@ -29,6 +29,8 @@ abstract type AbstractRNG end
 
 abstract type Distribution{T} end
 
+Base.eltype(::Type{Distribution{T}}) where {T} = T
+
 struct Distribution0{T} <: Distribution{T} end
 
 Distribution(::Type{T}) where {T} = Distribution0{T}()
@@ -84,7 +86,9 @@ const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
 
 ### Sampler
 
-abstract type Sampler end
+abstract type Sampler{E} end
+
+Base.eltype(::Sampler{E}) where {E} = E
 
 # temporarily for BaseBenchmarks
 RangeGenerator(x) = Sampler(GLOBAL_RNG, x)
@@ -110,35 +114,44 @@ Sampler(rng::AbstractRNG, ::Type{X}) where {X} = Sampler(rng, X, Val(Inf))
 #### pre-defined useful Sampler subtypes
 
 # default fall-back for types
-struct SamplerType{T} <: Sampler end
+struct SamplerType{T} <: Sampler{T} end
 
 Sampler(::AbstractRNG, ::Type{T}, ::Repetition) where {T} = SamplerType{T}()
 
-Base.getindex(sp::SamplerType{T}) where {T} = T
+Base.getindex(::SamplerType{T}) where {T} = T
 
 # default fall-back for values
-struct SamplerTrivial{T} <: Sampler
+struct SamplerTrivial{T,E} <: Sampler{E}
     self::T
 end
 
-Sampler(::AbstractRNG, X, ::Repetition) = SamplerTrivial(X)
+SamplerTrivial(x::T) where {T} = SamplerTrivial{T,eltype(T)}(x)
+
+Sampler(::AbstractRNG, x, ::Repetition) = SamplerTrivial(x)
 
 Base.getindex(sp::SamplerTrivial) = sp.self
 
 # simple sampler carrying data (which can be anything)
-struct SamplerSimple{T,S} <: Sampler
+struct SamplerSimple{T,S,E} <: Sampler{E}
     self::T
     data::S
 end
 
+SamplerSimple(x::T, data::S) where {T,S} = SamplerSimple{T,S,eltype(T)}(x, data)
+
 Base.getindex(sp::SamplerSimple) = sp.self
 
 # simple sampler carrying a (type) tag T and data
-struct SamplerTag{T,S} <: Sampler
+struct SamplerTag{T,S,E} <: Sampler{E}
     data::S
-    SamplerTag{T}(s::S) where {T,S} = new{T,S}(s)
+    SamplerTag{T}(s::S) where {T,S} = new{T,S,eltype(T)}(s)
 end
 
+# a dummy container type to take advangage of SamplerTag constructor
+
+struct Cont{T} end
+
+Base.eltype(::Type{Cont{T}}) where {T} = T
 
 ### machinery for generation with Sampler
 
