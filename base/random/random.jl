@@ -17,16 +17,47 @@ export srand,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
-       GLOBAL_RNG, randjump
+       GLOBAL_RNG, randjump,
+       Distributions, Uniform, Sampler
 
 
 ## general definitions
 
 abstract type AbstractRNG end
 
+### Distributions
+
+abstract type Distribution{T} end
+
+struct Distribution0{T} <: Distribution{T} end
+
+Distribution(::Type{T}) where {T} = Distribution0{T}()
+
+struct Distribution1{T,X} <: Distribution{T}
+    x::X
+end
+
+Distribution(::Type{T}, x::X) where {T,X} = Distribution1{T,X}(x)
+Distribution(::Type{T}, ::Type{X}) where {T,X} = Distribution1{T,Type{X}}(X)
+
+struct Distribution2{T,X,Y} <: Distribution{T}
+    x::X
+    y::Y
+end
+
+Distribution(::Type{T}, x::X, y::Y) where {T,X,Y} = Distribution2{T,X,Y}(x, y)
+Distribution(::Type{T}, ::Type{X}, y::Y) where {T,X,Y} = Distribution2{T,Type{X},Y}(X, y)
+Distribution(::Type{T}, x::X, ::Type{Y}) where {T,X,Y} = Distribution2{T,X,Type{Y}}(x, Y)
+Distribution(::Type{T}, ::Type{X}, ::Type{Y}) where {T,X,Y} = Distribution2{T,Type{X},Type{Y}}(X, Y)
+
+
+### Uniform
+
+abstract type Uniform{T} <: Distribution{T} end
+
 ### floats
 
-abstract type FloatInterval{T<:AbstractFloat} end
+abstract type FloatInterval{T<:AbstractFloat} <: Uniform{T} end
 
 struct CloseOpen{  T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
 struct Close1Open2{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
