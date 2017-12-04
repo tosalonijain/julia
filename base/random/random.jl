@@ -249,6 +249,38 @@ rand(r::AbstractRNG, ::Type{X}, ::Type{T}, n::Integer) where {X,T<:AbstractSet} 
 rand(                ::Type{X}, ::Type{T}, n::Integer) where {X,T<:AbstractSet} = rand(GLOBAL_RNG, X, T, n)
 
 
+#### sparse vectors & matrices
+
+# sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])
+
+rand(r::AbstractRNG, p::AbstractFloat, m::Integer) = sprand(r, m, p)
+rand(                p::AbstractFloat, m::Integer) = sprand(GLOBAL_RNG, m, p)
+rand(r::AbstractRNG, p::AbstractFloat, m::Integer, n::Integer) = sprand(r, m, n, p)
+rand(                p::AbstractFloat, m::Integer, n::Integer) = sprand(GLOBAL_RNG, m, n, p)
+
+rand(r::AbstractRNG, X::Sampler, p::AbstractFloat, m::Integer) =
+    sprand(r, m, p, (r, n)->rand(r, X, n))
+
+rand(r::AbstractRNG, X, p::AbstractFloat, m::Integer) =
+    rand(r, Sampler(r, X), p, m)
+
+rand(r::AbstractRNG, ::Type{X}, p::AbstractFloat, m::Integer) where {X} =
+    rand(r, Sampler(r, X), p, m)
+
+rand(X, p::AbstractFloat, m::Integer) = rand(GLOBAL_RNG, X, p, m)
+
+rand(r::AbstractRNG, X::Sampler, p::AbstractFloat, m::Integer, n::Integer) =
+    sprand(r, m, n, p, (r, n)->rand(r, sp, n), eltype(X))
+
+rand(r::AbstractRNG, X, p::AbstractFloat, m::Integer, n::Integer) =
+    rand(r, Sampler(r, X), p, m, n)
+
+rand(r::AbstractRNG, ::Type{X}, p::AbstractFloat, m::Integer, n::Integer) where {X} =
+    rand(r, Sampler(r, X), p, m, n)
+
+rand(X, p::AbstractFloat, m::Integer, n::Integer) = rand(GLOBAL_RNG, X, p, m, n)
+
+
 ## __init__ & include
 
 function __init__()
