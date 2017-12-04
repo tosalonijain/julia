@@ -303,6 +303,16 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     rand(                  ::Type{String}, n::Integer=8) = rand(GLOBAL_RNG, b, String, n)
 end
 
+
+#### BitArray
+
+rand(r::AbstractRNG, ::Type{BitArray}, dims::Dims)   = rand!(r, BitArray(uninitialized, dims))
+rand(r::AbstractRNG, ::Type{BitArray}, dims::Integer...) = rand!(r, BitArray(uninitialized, convert(Dims, dims)))
+
+rand(::Type{BitArray}, dims::Dims)   = rand!(BitArray(uninitialized, dims))
+rand(::Type{BitArray}, dims::Integer...) = rand!(BitArray(uninitialized, convert(Dims, dims)))
+
+
 ## __init__ & include
 
 function __init__()
