@@ -107,10 +107,24 @@ rand_ui23_raw(r::AbstractRNG) = rand(r, UInt32)
 rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
 rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 
-### random complex numbers
+### sampler for pairs and complex numbers
 
-rand(r::AbstractRNG, ::SamplerType{Complex{T}}) where {T<:Real} =
-    complex(rand(r, T), rand(r, T))
+function Sampler(rng::AbstractRNG, u::Distribution2{T}, n::Repetition) where T<:Union{Pair,Complex}
+    sp1 = Sampler(rng, u.x, n)
+    sp2 = u.x == u.y ? sp1 : Sampler(rng, u.y, n)
+    SamplerTag{T}((sp1, sp2))
+end
+
+rand(rng::AbstractRNG, sp::SamplerTag{T}) where {T<:Union{Complex,Pair}} =
+    T(rand(rng, sp.data[1]), rand(rng, sp.data[2]))
+
+#### additional methods for complex numbers
+
+Sampler(rng::AbstractRNG, u::Distribution1{Complex}, n::Repetition) =
+    Sampler(rng, Distribution(Complex, u.x, u.x), n)
+
+Sampler(rng::AbstractRNG, ::Type{Complex{T}}, n::Repetition) where {T<:Real} =
+    Sampler(rng, Distribution(Complex, T, T), n)
 
 ### random characters
 
