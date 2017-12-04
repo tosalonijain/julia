@@ -47,10 +47,20 @@ struct Distribution2{T,X,Y} <: Distribution{T}
     y::Y
 end
 
-Distribution(::Type{T}, x::X, y::Y) where {T,X,Y} = Distribution2{T,X,Y}(x, y)
-Distribution(::Type{T}, ::Type{X}, y::Y) where {T,X,Y} = Distribution2{T,Type{X},Y}(X, y)
-Distribution(::Type{T}, x::X, ::Type{Y}) where {T,X,Y} = Distribution2{T,X,Type{Y}}(x, Y)
-Distribution(::Type{T}, ::Type{X}, ::Type{Y}) where {T,X,Y} = Distribution2{T,Type{X},Type{Y}}(X, Y)
+Distribution(::Type{T}, x::X, y::Y) where {T,X,Y} = Distribution2{deduce_type(T,X,Y),X,Y}(x, y)
+Distribution(::Type{T}, ::Type{X}, y::Y) where {T,X,Y} = Distribution2{deduce_type(T,X,Y),Type{X},Y}(X, y)
+Distribution(::Type{T}, x::X, ::Type{Y}) where {T,X,Y} = Distribution2{deduce_type(T,X,Y),X,Type{Y}}(x, Y)
+Distribution(::Type{T}, ::Type{X}, ::Type{Y}) where {T,X,Y} = Distribution2{deduce_type(T,X,Y),Type{X},Type{Y}}(X, Y)
+
+deduce_type(::Type{T}, ::Type{X}, ::Type{Y}) where {T,X,Y} = _deduce_type(T, Val(isconcrete(T)), eltype(X), eltype(Y))
+deduce_type(::Type{T}, ::Type{X}) where {T,X} = _deduce_type(T, Val(isconcrete(T)), eltype(X))
+
+_deduce_type(::Type{T}, ::Val{true},  ::Type{X}, ::Type{Y}) where {T,X,Y} = T
+_deduce_type(::Type{T}, ::Val{false}, ::Type{X}, ::Type{Y}) where {T,X,Y} = deduce_type(T{X}, Y)
+
+_deduce_type(::Type{T}, ::Val{true},  ::Type{X}) where {T,X} = T
+_deduce_type(::Type{T}, ::Val{false}, ::Type{X}) where {T,X} = T{X}
+
 
 #### Uniform
 
@@ -225,10 +235,10 @@ rand!(rng::AbstractRNG, A::Associative{K,V}, sp::Sampler) where {K,V} = _rand!(r
 
 # TODO: what to do when e.g. T==Dict ? we could infer the K,V types from u, instead
 # of creating Dict(), i.e. Dict{Any,Any}()
-rand(rng::AbstractRNG, dist::Distribution{Pair}, ::Type{T}, n::Integer) where {T<:Associative} =
-    _rand!(rng, T(), n, Sampler(rng, dist))
+rand(rng::AbstractRNG, dist::Distribution{<:Pair}, ::Type{T}, n::Integer) where {T<:Associative} =
+    _rand!(rng, deduce_type(T, eltype(dist).parameters...)(), n, Sampler(rng, dist))
 
-rand(u::Distribution{Pair}, ::Type{T}, n::Integer) where {T<:Associative} = rand(GLOBAL_RNG, u, T, n)
+rand(u::Distribution{<:Pair}, ::Type{T}, n::Integer) where {T<:Associative} = rand(GLOBAL_RNG, u, T, n)
 
 
 #### sets
@@ -255,10 +265,10 @@ rand!(rng::AbstractRNG, A::AbstractSet, sp::Sampler) = _rand!(rng, A, length(A),
 rand(r::AbstractRNG, ::Type{T}, n::Integer) where {T<:AbstractSet} = rand(r, Float64, T, n)
 rand(                ::Type{T}, n::Integer) where {T<:AbstractSet} = rand(GLOBAL_RNG, T, n)
 
-rand(r::AbstractRNG, X, ::Type{T}, n::Integer) where {T<:AbstractSet} = _rand!(r, T{eltype(X)}(), n, X)
+rand(r::AbstractRNG, X, ::Type{T}, n::Integer) where {T<:AbstractSet} = _rand!(r, deduce_type(T, eltype(X))(), n, X)
 rand(                X, ::Type{T}, n::Integer) where {T<:AbstractSet} = rand(GLOBAL_RNG, X, T, n)
 
-rand(r::AbstractRNG, ::Type{X}, ::Type{T}, n::Integer) where {X,T<:AbstractSet} = _rand!(r, T{X}(), n, X)
+rand(r::AbstractRNG, ::Type{X}, ::Type{T}, n::Integer) where {X,T<:AbstractSet} = _rand!(r, deduce_type(T, X)(), n, X)
 rand(                ::Type{X}, ::Type{T}, n::Integer) where {X,T<:AbstractSet} = rand(GLOBAL_RNG, X, T, n)
 
 

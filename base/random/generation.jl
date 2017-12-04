@@ -110,13 +110,9 @@ rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 ### sampler for pairs and complex numbers
 
 function Sampler(rng::AbstractRNG, u::Distribution2{T}, n::Repetition) where T <: Union{Complex,Pair}
-    @assert T === Complex || T === Pair
     sp1 = Sampler(rng, u.x, n)
     sp2 = u.x == u.y ? sp1 : Sampler(rng, u.y, n)
-    SamplerTag{Cont{T === Complex ?
-                    Complex{eltype(sp1)} :
-                    Pair{eltype(sp1),eltype(sp2)}
-                    }}((sp1, sp2))
+    SamplerTag{Cont{T}}((sp1, sp2))
 end
 
 rand(rng::AbstractRNG, sp::SamplerTag{Cont{T}}) where {T<:Union{Complex,Pair}} =
