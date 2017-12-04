@@ -50,10 +50,19 @@ Distribution(::Type{T}, ::Type{X}, y::Y) where {T,X,Y} = Distribution2{T,Type{X}
 Distribution(::Type{T}, x::X, ::Type{Y}) where {T,X,Y} = Distribution2{T,X,Type{Y}}(x, Y)
 Distribution(::Type{T}, ::Type{X}, ::Type{Y}) where {T,X,Y} = Distribution2{T,Type{X},Type{Y}}(X, Y)
 
-
-### Uniform
+#### Uniform
 
 abstract type Uniform{T} <: Distribution{T} end
+
+#### Normal & Exponential
+
+struct Normal{T} <: Distribution{T} end
+
+Normal(::Type{T}=Float64) where {T} = Normal{T}()
+
+struct Exponential{T} <: Distribution{T} end
+
+Exponential(::Type{T}=Float64) where {T<:AbstractFloat} = Exponential{T}()
 
 ### floats
 

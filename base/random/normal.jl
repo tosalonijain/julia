@@ -7,6 +7,17 @@
 
 # randmtzig (covers also exponential variates)
 
+## rand(::Exponential) & rand(::Normal)
+
+rand(rng::AbstractRNG, ::SamplerTrivial{Normal{T}}) where {T<:AbstractFloat} =
+    randn(rng, T)
+
+rand(rng::AbstractRNG, ::SamplerTrivial{Exponential{T}}) where {T<:AbstractFloat} =
+    randexp(rng, T)
+
+rand(rng::AbstractRNG, ::SamplerTrivial{Normal{Complex{T}}}) where {T<:AbstractFloat} =
+    randn(rng, Complex{T})
+
 ## randn
 
 """
