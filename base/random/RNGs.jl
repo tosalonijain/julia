@@ -212,13 +212,13 @@ const GLOBAL_RNG = MersenneTwister(0)
 #### helper functions
 
 # precondition: !mt_empty(r)
-rand_inbounds(r::MersenneTwister, ::Close1Open2_64) = mt_pop!(r)
-rand_inbounds(r::MersenneTwister, ::CloseOpen_64) =
-    rand_inbounds(r, Close1Open2()) - 1.0
-rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen())
+rand_inbounds(r::MersenneTwister, ::CloseOpen12_64) = mt_pop!(r)
+rand_inbounds(r::MersenneTwister, ::CloseOpen01_64) =
+    rand_inbounds(r, CloseOpen12()) - 1.0
+rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen01())
 
 rand_ui52_raw_inbounds(r::MersenneTwister) =
-    reinterpret(UInt64, rand_inbounds(r, Close1Open2()))
+    reinterpret(UInt64, rand_inbounds(r, CloseOpen12()))
 rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
 
 function rand_ui2x52_raw(r::MersenneTwister)
@@ -291,10 +291,10 @@ end
 rand!(r::MersenneTwister, A::AbstractArray{Float64}, I::SamplerTrivial{<:FloatInterval_64}) =
     rand_AbstractArray_Float64!(r, A, linearindices(A), I[])
 
-fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen_64) =
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen01_64) =
     dsfmt_fill_array_close_open!(s, A, n)
 
-fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Close1Open2_64) =
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::CloseOpen12_64) =
     dsfmt_fill_array_close1_open2!(s, A, n)
 
 function _rand!(r::MersenneTwister, A::Array{Float64}, n::Int,
@@ -336,11 +336,11 @@ mask128(u::UInt128, ::Type{Float32}) =
     (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
 for T in (Float16, Float32)
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{Close1Open2{$T}})
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen12{$T}})
         n = length(A)
         n128 = n * sizeof($T) ÷ 16
         Base.@gc_preserve A _rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128),
-                                   2*n128, Close1Open2())
+                                   2*n128, CloseOpen12())
         # FIXME: This code is completely invalid!!!
         A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
         @inbounds for i in 1:n128
@@ -364,8 +364,8 @@ for T in (Float16, Float32)
         A
     end
 
-    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen{$T}})
-        rand!(r, A, Close1Open2($T))
+    @eval function rand!(r::MersenneTwister, A::Array{$T}, ::SamplerTrivial{CloseOpen01{$T}})
+        rand!(r, A, CloseOpen12($T))
         I32 = one(Float32)
         for i in eachindex(A)
             @inbounds A[i] = Float32(A[i])-I32 # faster than "A[i] -= one(T)" for T==Float16
@@ -382,7 +382,7 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, ::SamplerType{UInt128})
     Af = unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2n)
     i = n
     while true
-        _rand!(r, Af, 2i, Close1Open2())
+        _rand!(r, Af, 2i, CloseOpen12())
         n < 5 && break
         i = 0
         @inbounds while n-i >= 5
