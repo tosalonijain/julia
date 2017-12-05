@@ -31,26 +31,28 @@ abstract type Distribution{T} end
 
 Base.eltype(::Type{Distribution{T}}) where {T} = T
 
-struct Distribution0{T} <: Distribution{T} end
+abstract type Combine{T} <: Distribution{T} end
 
-Distribution(::Type{T}) where {T} = Distribution0{T}()
+struct Combine0{T} <: Combine{T} end
 
-struct Distribution1{T,X} <: Distribution{T}
+Combine(::Type{T}) where {T} = Combine0{T}()
+
+struct Combine1{T,X} <: Combine{T}
     x::X
 end
 
-Distribution(::Type{T}, x::X) where {T,X} = Distribution1{T,X}(x)
-Distribution(::Type{T}, ::Type{X}) where {T,X} = Distribution1{T,Type{X}}(X)
+Combine(::Type{T}, x::X) where {T,X} = Combine1{T,X}(x)
+Combine(::Type{T}, ::Type{X}) where {T,X} = Combine1{T,Type{X}}(X)
 
-struct Distribution2{T,X,Y} <: Distribution{T}
+struct Combine2{T,X,Y} <: Combine{T}
     x::X
     y::Y
 end
 
-Distribution(::Type{T}, x::X, y::Y) where {T,X,Y} = Distribution2{deduce_type(T,X,Y),X,Y}(x, y)
-Distribution(::Type{T}, ::Type{X}, y::Y) where {T,X,Y} = Distribution2{deduce_type(T,X,Y),Type{X},Y}(X, y)
-Distribution(::Type{T}, x::X, ::Type{Y}) where {T,X,Y} = Distribution2{deduce_type(T,X,Y),X,Type{Y}}(x, Y)
-Distribution(::Type{T}, ::Type{X}, ::Type{Y}) where {T,X,Y} = Distribution2{deduce_type(T,X,Y),Type{X},Type{Y}}(X, Y)
+Combine(::Type{T}, x::X, y::Y) where {T,X,Y} = Combine2{deduce_type(T,X,Y),X,Y}(x, y)
+Combine(::Type{T}, ::Type{X}, y::Y) where {T,X,Y} = Combine2{deduce_type(T,X,Y),Type{X},Y}(X, y)
+Combine(::Type{T}, x::X, ::Type{Y}) where {T,X,Y} = Combine2{deduce_type(T,X,Y),X,Type{Y}}(x, Y)
+Combine(::Type{T}, ::Type{X}, ::Type{Y}) where {T,X,Y} = Combine2{deduce_type(T,X,Y),Type{X},Type{Y}}(X, Y)
 
 deduce_type(::Type{T}, ::Type{X}, ::Type{Y}) where {T,X,Y} = _deduce_type(T, Val(isconcrete(T)), eltype(X), eltype(Y))
 deduce_type(::Type{T}, ::Type{X}) where {T,X} = _deduce_type(T, Val(isconcrete(T)), eltype(X))
@@ -91,7 +93,7 @@ end
 Exponential(::Type{T}=Float64) where {T<:AbstractFloat} = Exponential1{T}()
 Exponential(θ::T) where {T<:AbstractFloat} = Exponentialθ(θ)
 
-### floats
+#### floats
 
 abstract type FloatInterval{T<:AbstractFloat} <: Uniform{T} end
 abstract type CloseOpen{T<:AbstractFloat} <: FloatInterval{T} end
@@ -118,6 +120,7 @@ CloseOpen(a::T, b::T) where {T<:AbstractFloat} = CloseOpenAB{T}(a, b)
 Base.eltype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
 
 const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
+
 
 ### Sampler
 
