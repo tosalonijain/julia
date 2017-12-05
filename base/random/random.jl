@@ -79,9 +79,15 @@ Exponential(::Type{T}=Float64) where {T<:AbstractFloat} = Exponential{T}()
 ### floats
 
 abstract type FloatInterval{T<:AbstractFloat} <: Uniform{T} end
+abstract type CloseOpen{T<:AbstractFloat} <: FloatInterval{T} end
 
-struct CloseOpen01{T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
-struct CloseOpen12{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
+struct CloseOpen01{T<:AbstractFloat} <: CloseOpen{T} end # interval [0,1)
+struct CloseOpen12{T<:AbstractFloat} <: CloseOpen{T} end # interval [1,2)
+
+struct CloseOpenAB{T<:AbstractFloat} <: CloseOpen{T} # interval [a,b)
+    a::T
+    b::T
+end
 
 const FloatInterval_64 = FloatInterval{Float64}
 const CloseOpen01_64   = CloseOpen01{Float64}
@@ -89,6 +95,10 @@ const CloseOpen12_64   = CloseOpen12{Float64}
 
 CloseOpen01(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen01{T}()
 CloseOpen12(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen12{T}()
+
+CloseOpen(::Type{T}=Float64) where {T<:AbstractFloat} = CloseOpen01{T}()
+CloseOpen(a::T, b::T) where {T<:AbstractFloat} = CloseOpenAB{T}(a, b)
+
 
 Base.eltype(::Type{<:FloatInterval{T}}) where {T<:AbstractFloat} = T
 

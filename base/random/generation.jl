@@ -35,6 +35,12 @@ rand_generic(r::AbstractRNG, ::CloseOpen12_64) =
 
 rand_generic(r::AbstractRNG, ::CloseOpen01_64) = rand(r, CloseOpen12()) - 1.0
 
+Sampler(rng::AbstractRNG, d::CloseOpenAB{T}, n::Repetition) where {T} =
+    SamplerTag{CloseOpenAB{T}}((a=d.a, d=d.b - d.a, sp=Sampler(rng, CloseOpen01{T}(), n)))
+
+rand(rng::AbstractRNG, sp::SamplerTag{CloseOpenAB{T}}) where {T} =
+    sp.data.a + sp.data.d  * rand(rng, sp.data.sp)
+
 #### BigFloat
 
 const bits_in_Limb = sizeof(Limb) << 3
