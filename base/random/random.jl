@@ -351,6 +351,38 @@ rand(::Type{BitArray}, dims::Dims)   = rand!(BitArray(uninitialized, dims))
 rand(::Type{BitArray}, dims::Integer...) = rand!(BitArray(uninitialized, convert(Dims, dims)))
 
 
+### Rand
+
+struct Rand{R<:AbstractRNG,S<:Sampler}
+    rng::R
+    sp::S
+end
+
+# X can be an explicit Distribution, or an implicit one like 1:10
+Rand(rng::AbstractRNG, X) = Rand(rng, Sampler(rng, X))
+Rand(rng::AbstractRNG, ::Type{X}) where {X} = Rand(rng, Sampler(rng, X))
+
+Rand(X) = Rand(GLOBAL_RNG, X)
+Rand(::Type{X}) where {X} = Rand(GLOBAL_RNG, X)
+
+(R::Rand)(args...) = rand(R.rng, R.sp, args...)
+
+Base.start(R::Rand) = R
+
+function Base.next(::Union{Rand,Distribution}, R::Rand)
+    e = R()
+    e, R
+end
+
+Base.done(::Union{Rand,Distribution}, ::Rand) = false
+
+Base.iteratorsize(::Type{<:Rand}) = Base.IsInfinite()
+
+# convenience iteration over distributions
+
+Base.start(d::Distribution) = Rand(GLOBAL_RNG, d)
+Base.iteratorsize(::Type{<:Distribution}) = Base.IsInfinite()
+
 ## __init__ & include
 
 function __init__()
