@@ -7,16 +7,26 @@
 
 # randmtzig (covers also exponential variates)
 
-## rand(::Exponential) & rand(::Normal)
+## rand(::Normal) & rand(::Exponential)
 
-rand(rng::AbstractRNG, ::SamplerTrivial{Normal{T}}) where {T<:AbstractFloat} =
+rand(rng::AbstractRNG, ::SamplerTrivial{Normal01{T}}) where {T<:Union{AbstractFloat,Complex{<:AbstractFloat}}} =
     randn(rng, T)
 
-rand(rng::AbstractRNG, ::SamplerTrivial{Exponential{T}}) where {T<:AbstractFloat} =
+Sampler(rng::AbstractRNG, d::Normalμσ{T}, n::Repetition) where {T} =
+    SamplerSimple(d, Sampler(rng, Normal(T), n))
+
+rand(rng::AbstractRNG, sp::SamplerSimple{Normalμσ{T},<:Sampler}) where {T} =
+    sp[].μ + sp[].σ  * rand(rng, sp.data)
+
+rand(rng::AbstractRNG, ::SamplerTrivial{Exponential1{T}}) where {T<:AbstractFloat} =
     randexp(rng, T)
 
-rand(rng::AbstractRNG, ::SamplerTrivial{Normal{Complex{T}}}) where {T<:AbstractFloat} =
-    randn(rng, Complex{T})
+Sampler(rng::AbstractRNG, d::Exponentialθ{T}, n::Repetition) where {T} =
+    SamplerSimple(d, Sampler(rng, Exponential(T), n))
+
+rand(rng::AbstractRNG, sp::SamplerSimple{Exponentialθ{T},<:Sampler}) where {T} =
+    sp[].θ * rand(rng, sp.data)
+
 
 ## randn
 

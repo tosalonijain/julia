@@ -68,13 +68,28 @@ abstract type Uniform{T} <: Distribution{T} end
 
 #### Normal & Exponential
 
-struct Normal{T} <: Distribution{T} end
+abstract type Normal{T} <: Distribution{T} end
 
-Normal(::Type{T}=Float64) where {T} = Normal{T}()
+struct Normal01{T} <: Normal{T} end
 
-struct Exponential{T} <: Distribution{T} end
+struct Normalμσ{T} <: Normal{T}
+    μ::T
+    σ::T
+end
 
-Exponential(::Type{T}=Float64) where {T<:AbstractFloat} = Exponential{T}()
+Normal(::Type{T}=Float64) where {T} = Normal01{T}()
+Normal(μ::T, σ::T) where {T} = Normalμσ(μ, σ)
+
+abstract type Exponential{T} <: Distribution{T} end
+
+struct Exponential1{T} <: Exponential{T} end
+
+struct Exponentialθ{T} <: Exponential{T}
+    θ::T
+end
+
+Exponential(::Type{T}=Float64) where {T<:AbstractFloat} = Exponential1{T}()
+Exponential(θ::T) where {T<:AbstractFloat} = Exponentialθ(θ)
 
 ### floats
 
