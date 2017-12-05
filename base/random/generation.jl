@@ -15,6 +15,9 @@
 
 ## from types: rand(::Type, [dims...])
 
+Sampler(rng::AbstractRNG, d::Union{UniformWrap,UniformType}, n::Repetition) =
+    Sampler(rng, d[], n)
+
 ### random floats
 
 Sampler(rng::AbstractRNG, ::Type{T}, n::Repetition) where {T<:AbstractFloat} =
