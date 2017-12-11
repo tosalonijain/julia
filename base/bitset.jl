@@ -2,13 +2,20 @@
 
 const Bits = Vector{UInt64}
 const CHK0 = zero(UInt64)
+const NO_OFFSET = Int === Int64 ? -one(Int) << 60 : -one(Int) << 29
+# + NO_OFFSET must be small enough to stay < 0 when add with any offset.
+#   An offset is in the range -2^57:2^57 (64-bits architectures)
+#   or -2^26:2^26 (32-bits architectures)
+# + when the offset is NO_OFFSET, the bits field *must* be empty
+# + NO_OFFSET could be made to be > 0, but a negative one allows
+#   a small optimization in the in(x, ::BitSet)
 
 mutable struct BitSet <: AbstractSet{Int}
     bits::Vector{UInt64}
     # 1st stored Int equals 64*offset
     offset::Int
 
-    BitSet() = new(sizehint!(zeros(UInt64, 0), 4), 0)
+    BitSet() = new(sizehint!(zeros(UInt64, 0), 4), NO_OFFSET)
 end
 
 """
@@ -67,13 +74,18 @@ end
 @inline function _setint!(s::BitSet, idx::Int, b::Bool)
     cidx = chk_indice(idx)
     len = length(s.bits)
-    if len == 0 # initialize the offset
-        b || return s
-        s.offset = cidx
-    end
     diff = cidx - s.offset
     if diff >= len
         b || return s # setting a bit to zero outside the set's bits is a no-op
+
+        # we put the following test within one of the two branches,
+        # with the NO_OFFSET trick, to avoid having to perform it at
+        # each and every call to _setint!
+        if s.offset == NO_OFFSET # initialize the offset
+            # we assume isempty(s.bits)
+            s.offset = cidx
+            diff = 0
+        end
         _growend0!(s.bits, diff - len + 1)
     elseif diff < 0
         b || return s
@@ -99,7 +111,19 @@ end
 end
 
 function _matched_map!(f, s1::BitSet, s2::BitSet)
-    o1 = _matched_map!(f, s1.bits, s1.offset, s2.bits, s2.offset)
+    left_false_is_false = f(false, false) == f(false, true) == false
+    right_false_is_false = f(false, false) == f(true, false) == false
+
+    # we must first handle the NO_OFFSET case; we could test for
+    # isempty(s1) but it can be costly, so the user has to call
+    # empty!(s1) herself before-hand to re-initialize to NO_OFFSET
+    if s1.offset == NO_OFFSET
+        return left_false_is_false ? s1 : copy!(s1, s2)
+    elseif s2.offset == NO_OFFSET
+        return right_false_is_false ? empty!(s1) : s1
+    end
+    o1 = _matched_map!(f, s1.bits, s1.offset, s2.bits, s2.offset,
+                       left_false_is_false, right_false_is_false)
     s1.offset = o1
     s1
 end
@@ -107,7 +131,8 @@ end
 # An internal function that takes a pure function `f` and maps across two BitArrays
 # allowing the lengths and offsets to be different and altering b1 with the result
 # WARNING: the assumptions written in the else clauses must hold
-function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int)
+function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
+                       left_false_is_false::Bool, right_false_is_false::Bool)
     l1, l2 = length(a1), length(a2)
     bdiff = b2 - b1
     e1, e2 = l1+b1, l2+b2
@@ -119,7 +144,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int)
     end
 
     if ediff > 0
-        if f(false, false) == f(false, true) == false
+        if left_false_is_false
             # We don't need to worry about the trailing bits — they're all false
         else # @assert f(false, x) == x
             _growend!(a1, ediff)
@@ -134,7 +159,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int)
             l1 = length(a1)
         end
     elseif ediff < 0
-        if f(false, false) == f(true, false) == false
+        if right_false_is_false
             # We don't need to worry about the trailing bits — they're all false
             _deleteend!(a1, min(l1, -ediff))
             # no need to update l1, as if bdiff > 0 (case below), then bdiff will
@@ -146,7 +171,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int)
     end
 
     if bdiff < 0
-        if f(false, false) == f(false, true) == false
+        if left_false_is_false
             # We don't need to worry about the leading bits — they're all false
         else # @assert f(false, x) == x
             _growbeg!(a1, -bdiff)
@@ -160,7 +185,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int)
             unsafe_copy!(a1, 1, a2, 1, min(-bdiff, l2))
         end
     elseif bdiff > 0
-        if f(false, false) == f(true, false) == false
+        if right_false_is_false
             # We don't need to worry about the trailing bits — they're all false
             _deletebeg!(a1, min(l1, bdiff))
             b1 += bdiff
@@ -204,7 +229,12 @@ end
 
 shift!(s::BitSet) = pop!(s, first(s))
 
-empty!(s::BitSet) = (empty!(s.bits); s)
+function empty!(s::BitSet)
+    empty!(s.bits)
+    s.offset = NO_OFFSET
+    s
+end
+
 isempty(s::BitSet) = all(equalto(CHK0), s.bits)
 
 # Mathematical set functions: union!, intersect!, setdiff!, symdiff!
