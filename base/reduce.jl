@@ -64,7 +64,7 @@ function mapfoldl(f, op, itr)
         return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
     end
     (x, i) = next(itr, i)
-    v0 = f(x)
+    v0 = mapreduce_single(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
 
@@ -133,7 +133,7 @@ function mapfoldr(f, op, itr)
     if isempty(itr)
         return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
     end
-    return mapfoldr_impl(f, op, f(itr[i]), itr, i-1)
+    return mapfoldr_impl(f, op, mapreduce_single(f, op, itr[i]), itr, i-1)
 end
 
 """
@@ -174,7 +174,7 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 @noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
-        return f(a1)
+        return mapreduce_single(f, op, a1)
     elseif ifirst + blksize > ilast
         # sequential portion
         @inbounds a1 = A[ifirst]
@@ -238,12 +238,30 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 # handling empty arrays
 _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
+
+"""
+    Base.reduce_empty(op, T)
+
+The value to be returned when calling [`reduce`](@ref) with `op` over an empty array with
+element type of `T`.
+
+If not defined, this will throw an `ArgumentError`.
+"""
 reduce_empty(op, T) = _empty_reduce_error()
 reduce_empty(::typeof(+), T) = zero(T)
 reduce_empty(::typeof(*), T) = one(T)
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
+
+"""
+    Base.mapreduce_empty(f, op, T)
+
+The value to be returned when calling [`mapreduce`](@ref) with `f` and `op` over an empty
+array with element type of `T`.
+
+If not defined, this will throw an `ArgumentError`.
+"""
 mapreduce_empty(f, op, T) = _empty_reduce_error()
 mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
 mapreduce_empty(f::_PromoteSysSizeFunction, op, T) =
@@ -266,6 +284,19 @@ mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
 mapreduce_empty_iter(f, op::typeof(|), itr, ::EltypeUnknown) = false
 mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
+# handling of single-element iterators
+"""
+    Base.mapreduce_single(f, op, x)
+
+The value to be returned when calling [`mapreduce`] with `f` and `op` over an iterator
+which contains a single element `x`.
+
+The default is `f(x)`.
+"""
+mapreduce_single(f, op, x) = f(x)
+
+
+
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
@@ -275,7 +306,7 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
         return mapreduce_empty(f, op, T)
     elseif n == 1
         @inbounds a1 = A[inds[1]]
-        return f(a1)
+        return mapreduce_single(f, op, a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
         @inbounds i = inds[1]
         @inbounds a1 = A[i]
