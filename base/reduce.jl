@@ -12,15 +12,25 @@ else
     const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
-# Certain reductions like sum and prod may wish to promote the items being reduced over to
-# a wider type.
-add_tosys(x,y) = x + y
-add_tosys(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
-add_tosys(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
+"""
+    Base.add_sum(x,y)
 
-mul_tosys(x,y) = x * y
-mul_tosys(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
-mul_tosys(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
+The reduction operator used in `sum`. The main difference from [`+`](@ref) is that small
+integers are promoted to `Int`/`UInt`.
+"""
+add_sum(x,y) = x + y
+add_sum(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
+add_sum(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
+
+"""
+    Base.mul_prod(x,y)
+
+The reduction operator used in `prod`. The main difference from [`*`](@ref) is that small
+integers are promoted to `Int`/`UInt`.
+"""
+mul_prod(x,y) = x * y
+mul_prod(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
+mul_prod(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
@@ -240,36 +250,38 @@ _empty_reduce_error() = throw(ArgumentError("reducing over an empty collection i
 """
     Base.reduce_empty(op, T)
 
-The value to be returned when calling [`reduce`](@ref) with `op` over an empty array with
-element type of `T`.
+The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref) or [`foldr`](@ref)
+with reduction `op` over an empty array with element type of `T`.
 
 If not defined, this will throw an `ArgumentError`.
 """
 reduce_empty(op, T) = _empty_reduce_error()
 reduce_empty(::typeof(+), T) = zero(T)
+reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
 reduce_empty(::typeof(*), T) = one(T)
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(add_tosys), T) = zero(T)
-reduce_empty(::typeof(add_tosys), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
-reduce_empty(::typeof(add_tosys), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_tosys), T) = one(T)
-reduce_empty(::typeof(mul_tosys), ::Type{T}) where {T<:SmallSigned}  = one(Int)
-reduce_empty(::typeof(mul_tosys), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+reduce_empty(::typeof(add_sum), T) = reduce_empty(+, T)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
+reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
+reduce_empty(::typeof(mul_prod), T) = reduce_empty(*, T)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
+reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
 
 """
     Base.mapreduce_empty(f, op, T)
 
-The value to be returned when calling [`mapreduce`](@ref) with `f` and `op` over an empty
-array with element type of `T`.
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+[`mapfoldr`](@ref) with map `f` and reduction `op` over an empty array with element type
+of `T`.
 
 If not defined, this will throw an `ArgumentError`.
 """
 mapreduce_empty(f, op, T) = _empty_reduce_error()
-mapreduce_empty(f::typeof(identity), op, T) = f(reduce_empty(op, T))
-mapreduce_empty(f::typeof(abs), op, T)      = f(reduce_empty(op, T))
-mapreduce_empty(f::typeof(abs2), op, T)     = f(reduce_empty(op, T))
+mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
+mapreduce_empty(::typeof(abs), op, T)      = abs(reduce_empty(op, T))
+mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 
 mapreduce_empty(f::typeof(abs),  ::Union{typeof(scalarmax), typeof(max)}, T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::Union{typeof(scalarmax), typeof(max)}, T) = abs2(zero(T))
@@ -283,26 +295,32 @@ mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 """
     Base.reduce_single(f, op, x)
 
-The value to be returned when calling [`reduce`] with `op` over an iterator which contains
-a single element `x`.
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+[`mapfoldr`](@ref) with reduction `op` over an iterator which contains a single element
+`x`.
 
 The default is `x`.
 """
 reduce_single(op, x) = x
-reduce_single(::typeof(add_tosys), x::SmallSigned)   = Int(x)
-reduce_single(::typeof(add_tosys), x::SmallUnsigned) = UInt(x)
-reduce_single(::typeof(mul_tosys), x::SmallSigned)   = Int(x)
-reduce_single(::typeof(mul_tosys), x::SmallUnsigned) = UInt(x)
+reduce_single(::typeof(+), x::Bool) = Int(x)
+
+reduce_single(::typeof(add_sum), x) = reduce_single(+, x)
+reduce_single(::typeof(add_sum), x::SmallSigned)   = Int(x)
+reduce_single(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
+reduce_single(::typeof(mul_prod), x) = reduce_single(*, x)
+reduce_single(::typeof(mul_prod), x::SmallSigned)   = Int(x)
+reduce_single(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
 
 """
     Base.mapreduce_single(f, op, x)
 
-The value to be returned when calling [`mapreduce`] with `f` and `op` over an iterator
-which contains a single element `x`.
+The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
+[`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
+single element `x`.
 
-The default is `f(reduce_single(op, x))`.
+The default is `reduce_single(op, f(x))`.
 """
-mapreduce_single(f, op, x) = f(reduce_single(op, x))
+mapreduce_single(f, op, x) = reduce_single(op, f(x))
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
@@ -410,7 +428,7 @@ In the former case, the integers are widened to system word size and therefore
 the result is 128. In the latter case, no such widening happens and integer
 overflow results in -128.
 """
-sum(f, a) = mapreduce(f, add_tosys, a)
+sum(f, a) = mapreduce(f, add_sum, a)
 
 """
     sum(itr)
@@ -444,7 +462,7 @@ julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f::Callable, a) = mapreduce(f, mul_tosys, a)
+prod(f::Callable, a) = mapreduce(f, mul_prod, a)
 
 """
     prod(itr)
@@ -460,7 +478,7 @@ julia> prod(1:20)
 2432902008176640000
 ```
 """
-prod(a) = mapreduce(identity, mul_tosys, a)
+prod(a) = mapreduce(identity, mul_prod, a)
 
 ## maximum & minimum
 
