@@ -13,16 +13,14 @@ else
 end
 
 # Certain reductions like sum and prod may wish to promote the items being reduced over to
-# an appropriate size. Note we need x + zero(x) because some types like Bool have their sum
-# lie in a larger type.
-promote_sys_size(T::Type) = T
-promote_sys_size(::Type{<:SmallSigned}) = Int
-promote_sys_size(::Type{<:SmallUnsigned}) = UInt
+# a wider type.
+add_tosys(x,y) = x + y
+add_tosys(x::SmallSigned,y::SmallSigned) = Int(x) + Int(y)
+add_tosys(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) + UInt(y)
 
-promote_sys_size_add(x) = convert(promote_sys_size(typeof(x + zero(x))), x)
-promote_sys_size_mul(x) = convert(promote_sys_size(typeof(x * one(x))), x)
-const _PromoteSysSizeFunction = Union{typeof(promote_sys_size_add),
-                                      typeof(promote_sys_size_mul)}
+mul_tosys(x,y) = x * y
+mul_tosys(x::SmallSigned,y::SmallSigned) = Int(x) * Int(y)
+mul_tosys(x::SmallUnsigned,y::SmallUnsigned) = UInt(x) * UInt(y)
 
 ## foldl && mapfoldl
 
@@ -253,6 +251,12 @@ reduce_empty(::typeof(*), T) = one(T)
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
+reduce_empty(::typeof(add_tosys), T) = zero(T)
+reduce_empty(::typeof(add_tosys), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
+reduce_empty(::typeof(add_tosys), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
+reduce_empty(::typeof(mul_tosys), T) = one(T)
+reduce_empty(::typeof(mul_tosys), ::Type{T}) where {T<:SmallSigned}  = one(Int)
+reduce_empty(::typeof(mul_tosys), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
 
 """
     Base.mapreduce_empty(f, op, T)
@@ -263,21 +267,12 @@ array with element type of `T`.
 If not defined, this will throw an `ArgumentError`.
 """
 mapreduce_empty(f, op, T) = _empty_reduce_error()
-mapreduce_empty(::typeof(identity), op, T) = reduce_empty(op, T)
-mapreduce_empty(f::_PromoteSysSizeFunction, op, T) =
-    f(mapreduce_empty(identity, op, T))
-mapreduce_empty(::typeof(abs), ::typeof(+), T) = abs(zero(T))
-mapreduce_empty(::typeof(abs2), ::typeof(+), T) = abs2(zero(T))
-mapreduce_empty(::typeof(abs), ::Union{typeof(scalarmax), typeof(max)}, T) =
-    abs(zero(T))
-mapreduce_empty(::typeof(abs2), ::Union{typeof(scalarmax), typeof(max)}, T) =
-    abs2(zero(T))
+mapreduce_empty(f::typeof(identity), op, T) = f(reduce_empty(op, T))
+mapreduce_empty(f::typeof(abs), op, T)      = f(reduce_empty(op, T))
+mapreduce_empty(f::typeof(abs2), op, T)     = f(reduce_empty(op, T))
 
-# Allow mapreduce_empty to “see through” promote_sys_size
-let ComposedFunction = typename(typeof(identity ∘ identity)).wrapper
-    global mapreduce_empty(f::ComposedFunction{<:_PromoteSysSizeFunction}, op, T) =
-        f.f(mapreduce_empty(f.g, op, T))
-end
+mapreduce_empty(f::typeof(abs),  ::Union{typeof(scalarmax), typeof(max)}, T) = abs(zero(T))
+mapreduce_empty(f::typeof(abs2), ::Union{typeof(scalarmax), typeof(max)}, T) = abs2(zero(T))
 
 mapreduce_empty_iter(f, op, itr, ::HasEltype) = mapreduce_empty(f, op, eltype(itr))
 mapreduce_empty_iter(f, op::typeof(&), itr, ::EltypeUnknown) = true
@@ -286,16 +281,28 @@ mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 # handling of single-element iterators
 """
+    Base.reduce_single(f, op, x)
+
+The value to be returned when calling [`reduce`] with `op` over an iterator which contains
+a single element `x`.
+
+The default is `x`.
+"""
+reduce_single(op, x) = x
+reduce_single(::typeof(add_tosys), x::SmallSigned)   = Int(x)
+reduce_single(::typeof(add_tosys), x::SmallUnsigned) = UInt(x)
+reduce_single(::typeof(mul_tosys), x::SmallSigned)   = Int(x)
+reduce_single(::typeof(mul_tosys), x::SmallUnsigned) = UInt(x)
+
+"""
     Base.mapreduce_single(f, op, x)
 
 The value to be returned when calling [`mapreduce`] with `f` and `op` over an iterator
 which contains a single element `x`.
 
-The default is `f(x)`.
+The default is `f(reduce_single(op, x))`.
 """
-mapreduce_single(f, op, x) = f(x)
-
-
+mapreduce_single(f, op, x) = f(reduce_single(op, x))
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
@@ -325,7 +332,7 @@ end
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
-mapreduce(f, op, a::Number) = f(a)
+mapreduce(f, op, a::Number) = mapreduce_single(f, op, a)
 
 """
     reduce(op, v0, itr)
@@ -403,7 +410,7 @@ In the former case, the integers are widened to system word size and therefore
 the result is 128. In the latter case, no such widening happens and integer
 overflow results in -128.
 """
-sum(f::Callable, a) = mapreduce(promote_sys_size_add ∘ f, +, a)
+sum(f, a) = mapreduce(f, add_tosys, a)
 
 """
     sum(itr)
@@ -419,7 +426,7 @@ julia> sum(1:20)
 210
 ```
 """
-sum(a) = mapreduce(promote_sys_size_add, +, a)
+sum(a) = sum(identity, a)
 sum(a::AbstractArray{Bool}) = count(a)
 
 ## prod
@@ -437,7 +444,7 @@ julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f::Callable, a) = mapreduce(promote_sys_size_mul ∘ f, *, a)
+prod(f::Callable, a) = mapreduce(f, mul_tosys, a)
 
 """
     prod(itr)
@@ -453,7 +460,7 @@ julia> prod(1:20)
 2432902008176640000
 ```
 """
-prod(a) = mapreduce(promote_sys_size_mul, *, a)
+prod(a) = mapreduce(identity, mul_tosys, a)
 
 ## maximum & minimum
 
