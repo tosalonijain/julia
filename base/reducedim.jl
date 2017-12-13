@@ -610,18 +610,9 @@ julia> any!([1 1], A)
 """
 any!(r, A)
 
-for (fname, op) in [(:sum, :+), (:prod, :*),
+for (fname, op) in [(:sum, :add_tosys), (:prod, :mul_tosys),
                     (:maximum, :scalarmax), (:minimum, :scalarmin),
                     (:all, :&), (:any, :|)]
-    function compose_promote_sys_size(x)
-        if fname === :sum
-            :(promote_sys_size_add ∘ $x)
-        elseif fname === :prod
-            :(promote_sys_size_mul ∘ $x)
-        else
-            x
-        end
-    end
     fname! = Symbol(fname, '!')
     @eval begin
         $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
@@ -629,7 +620,7 @@ for (fname, op) in [(:sum, :+), (:prod, :*),
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(fname)(f::Function, A::AbstractArray, region) =
-            mapreducedim($(compose_promote_sys_size(:f)), $(op), A, region)
+            mapreducedim(f, $(op), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(identity, A, region)
     end
 end
