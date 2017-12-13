@@ -259,6 +259,7 @@ reduce_empty(op, T) = _empty_reduce_error()
 reduce_empty(::typeof(+), T) = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
 reduce_empty(::typeof(*), T) = one(T)
+reduce_empty(::typeof(*), ::Type{Char}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
@@ -303,6 +304,7 @@ The default is `x`.
 """
 reduce_single(op, x) = x
 reduce_single(::typeof(+), x::Bool) = Int(x)
+reduce_single(::typeof(*), x::Char) = string(x)
 
 reduce_single(::typeof(add_sum), x) = reduce_single(+, x)
 reduce_single(::typeof(add_sum), x::SmallSigned)   = Int(x)
@@ -489,7 +491,7 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
                         A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     @inbounds a1 = A[first]
-    v = f(a1)
+    v = mapreduce_single(f, op, a1)
     i = first + 1
     while (v == v) && (i <= last)
         @inbounds ai = A[i]
