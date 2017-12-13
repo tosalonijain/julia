@@ -462,7 +462,7 @@ julia> prod(abs2, [2; 3; 4])
 576
 ```
 """
-prod(f::Callable, a) = mapreduce(f, mul_prod, a)
+prod(f, a) = mapreduce(f, mul_prod, a)
 
 """
     prod(itr)
