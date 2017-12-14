@@ -254,7 +254,7 @@ let fname = tempname(), p
         nothing
     end
     OLD_STDERR = STDERR
-    redirect_stderr(open("$(escape_string(fname))", "w"))
+    redirect_stderr(open($(repr(fname)), "w"))
     # Usually this would be done by GC. Do it manually, to make the failure
     # case more reliable.
     oldhandle = OLD_STDERR.handle
@@ -387,10 +387,22 @@ let cmd = ["/Volumes/External HD/program", "-a"]
     @test Base.shell_split("\"/Volumes/External HD/program\" -a") == cmd
 end
 
+# Test shell_escape printing quoting
 # Backticks should automatically quote where necessary
-let cmd = ["foo bar", "baz"]
-    @test string(`$cmd`) == "`'foo bar' baz`"
+let cmd = ["foo bar", "baz", "a'b", "a\"b", "a\"b\"c", "-L/usr/+", "a=b", "``", "\$", "&&", "z"]
+    @test string(`$cmd`) ==
+        """`'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b \\`\\` '\$' '&&' z`"""
+    @test Base.shell_escape(`$cmd`) ==
+        """'foo bar' baz "a'b" 'a"b' 'a"b"c' -L/usr/+ a=b `` '\$' && z"""
+    @test Base.shell_escape_posixly(`$cmd`) ==
+        """'foo bar' baz a\\'b a\\"b 'a"b"c' -L/usr/+ a=b '``' '\$' '&&' z"""
 end
+let cmd = ["foo=bar", "baz"]
+    @test string(`$cmd`) == "`foo=bar baz`"
+    @test Base.shell_escape(`$cmd`) == "foo=bar baz"
+    @test Base.shell_escape_posixly(`$cmd`) == "'foo=bar' baz"
+end
+
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
@@ -498,3 +510,14 @@ end
 #    @test sizeof(readstring(stdout)) == 1048576 * 2 # make sure we get all the data
 #    @test success(p)
 #end
+
+# `kill` error conditions
+let p = spawn(`$sleepcmd 100`)
+    # Should throw on invalid signals
+    @test_throws Base.UVError kill(p, typemax(Cint))
+    kill(p)
+    wait(p)
+    # Should not throw if already dead
+    kill(p)
+end
+

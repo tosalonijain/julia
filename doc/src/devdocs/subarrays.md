@@ -43,12 +43,12 @@ DocTestSetup = :(srand(1234))
 julia> A = rand(2,3,4);
 
 julia> S1 = view(A, :, 1, 2:3)
-2×2 SubArray{Float64,2,Array{Float64,3},Tuple{Base.Slice{Base.OneTo{Int64}},Int64,UnitRange{Int64}},false}:
+2×2 view(::Array{Float64,3}, :, 1, 2:3) with eltype Float64:
  0.200586  0.066423
  0.298614  0.956753
 
 julia> S2 = view(A, 1, :, 2:3)
-3×2 SubArray{Float64,2,Array{Float64,3},Tuple{Int64,Base.Slice{Base.OneTo{Int64}},UnitRange{Int64}},true}:
+3×2 view(::Array{Float64,3}, 1, :, 2:3) with eltype Float64:
  0.200586  0.066423
  0.246837  0.646691
  0.648882  0.276021
@@ -108,7 +108,7 @@ of the parent array, whereas for `S2` one needs to apply them to the second and 
 approach to indexing would be to do the type-analysis at runtime:
 
 ```julia
-parentindexes = Array{Any}(0)
+parentindexes = Vector{Any}()
 for thisindex in S.indexes
     ...
     if isa(thisindex, Int)
@@ -139,7 +139,7 @@ expands to
 Base.reindex(S1, S1.indexes, (i, j)) == (i, S1.indexes[2], S1.indexes[3][j])
 ```
 
-for any pair of indices `(i,j)` (except `CartesianIndex`s and arrays thereof, see below).
+for any pair of indices `(i,j)` (except [`CartesianIndex`](@ref)s and arrays thereof, see below).
 
 This is the core of a `SubArray`; indexing methods depend upon `reindex` to do this index translation.
 Sometimes, though, we can avoid the indirection and make it even faster.
@@ -172,7 +172,7 @@ happens to be uniform:
 
 ```jldoctest
 julia> A = reshape(1:4*2, 4, 2)
-4×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
+4×2 reshape(::UnitRange{Int64}, 4, 2) with eltype Int64:
  1  5
  2  6
  3  7
@@ -191,7 +191,7 @@ size of the array: if the first dimension instead were odd,
 
 ```jldoctest
 julia> A = reshape(1:5*2, 5, 2)
-5×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
+5×2 reshape(::UnitRange{Int64}, 5, 2) with eltype Int64:
  1   6
  2   7
  3   8
@@ -240,7 +240,7 @@ then `A[2:2:4,:]` does not have uniform stride, so we cannot guarantee efficient
     if possible. Consequently, `view` ensures that the parent array is the appropriate dimensionality
     for the given indices by reshaping it if needed. The inner `SubArray` constructor ensures that
     this invariant is satisfied.
-  * `CartesianIndex` and arrays thereof throw a nasty wrench into the `reindex` scheme. Recall that
+  * [`CartesianIndex`](@ref) and arrays thereof throw a nasty wrench into the `reindex` scheme. Recall that
     `reindex` simply dispatches on the type of the stored indices in order to determine how many passed
     indices should be used and where they should go. But with `CartesianIndex`, there's no longer
     a one-to-one correspondence between the number of passed arguments and the number of dimensions

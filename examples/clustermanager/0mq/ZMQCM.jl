@@ -1,8 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using ZMQ
+# the 0mq clustermanager depends on package ZMQ. For testing purposes, at least
+# make sure the code loads without it.
+try
+    using ZMQ
+end
 
-import Base: launch, manage, connect, kill
+using Distributed
+import Distributed: launch, manage, connect, kill
 
 const BROKER_SUB_PORT = 8100
 const BROKER_PUB_PORT = 8101
@@ -197,7 +202,7 @@ end
 function launch(manager::ZMQCMan, params::Dict, launched::Array, c::Condition)
     #println("launch $(params[:np])")
     for i in 1:params[:np]
-        io, pobj = open(`$(params[:exename]) worker.jl $i $(Base.cluster_cookie())`, "r")
+        io, pobj = open(`$(params[:exename]) worker.jl $i $(cluster_cookie())`, "r")
 
         wconfig = WorkerConfig()
         wconfig.userdata = Dict(:zid=>i, :io=>io)
@@ -230,7 +235,7 @@ end
 # WORKER
 function start_worker(zid, cookie)
     #println("start_worker")
-    Base.init_worker(cookie, ZMQCMan())
+    init_worker(cookie, ZMQCMan())
     init_node(zid)
 
     while true
@@ -242,7 +247,7 @@ function start_worker(zid, cookie)
         if streams === nothing
             # First time..
             (r_s, w_s) = setup_connection(from_zid, REMOTE_INITIATED)
-            Base.process_messages(r_s, w_s)
+            process_messages(r_s, w_s)
         else
             (r_s, w_s, t_r) = streams
         end
@@ -271,7 +276,7 @@ end
 function print_worker_stdout(io, pid)
     @schedule while !eof(io)
         line = readline(io)
-        println("\tFrom worker $(pid):\t$line")
+        println("      From worker $(pid):\t$line")
     end
 end
 

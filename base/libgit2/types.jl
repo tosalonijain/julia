@@ -188,13 +188,7 @@ end
 
 abstract type Payload end
 
-"""
-    LibGit2.RemoteCallbacks
-
-Callback settings.
-Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
-"""
-@kwdef struct RemoteCallbacks
+@kwdef struct RemoteCallbacksStruct
     version::Cuint                    = 1
     sideband_progress::Ptr{Void}
     completion::Ptr{Void}
@@ -210,12 +204,24 @@ Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/ty
     payload::Ptr{Void}
 end
 
-function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Ref{<:Payload})
-    RemoteCallbacks(credentials=credentials_cb, payload=pointer_from_objref(payload))
-end
+"""
+    LibGit2.RemoteCallbacks
 
-function RemoteCallbacks(credentials_cb::Ptr{Void}, payload::Payload)
-    RemoteCallbacks(credentials_cb, Ref(payload))
+Callback settings.
+Matches the [`git_remote_callbacks`](https://libgit2.github.com/libgit2/#HEAD/type/git_remote_callbacks) struct.
+"""
+struct RemoteCallbacks
+    cb::RemoteCallbacksStruct
+    gcroot::Ref{Any}
+    function RemoteCallbacks(; payload::Union{Payload, Void}=nothing, kwargs...)
+        p = Ref{Any}(payload)
+        if payload === nothing
+            pp = C_NULL
+        else
+            pp = unsafe_load(Ptr{Ptr{Void}}(Base.unsafe_convert(Ptr{Any}, p)))
+        end
+        return new(RemoteCallbacksStruct(; kwargs..., payload=pp), p)
+    end
 end
 
 """
@@ -245,9 +251,8 @@ The fields represent:
 
 # Examples
 ```julia-repl
-julia> fo = LibGit2.FetchOptions();
-
-julia> fo.proxy_opts = LibGit2.ProxyOptions(url=Cstring("https://my_proxy_url.com"))
+julia> fo = LibGit2.FetchOptions(
+           proxy_opts = LibGit2.ProxyOptions(url = Cstring("https://my_proxy_url.com")))
 
 julia> fetch(remote, "master", options=fo)
 ```
@@ -261,6 +266,19 @@ julia> fetch(remote, "master", options=fo)
     payload::Ptr{Void}
 end
 
+@kwdef struct FetchOptionsStruct
+    version::Cuint                  = 1
+    callbacks::RemoteCallbacksStruct
+    prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
+    update_fetchhead::Cint          = 1
+    download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct
+    end
+end
 
 """
     LibGit2.FetchOptions
@@ -281,18 +299,26 @@ The fields represent:
   * `custom_headers`: any extra headers needed for the fetch. Only present on libgit2 versions
      newer than or equal to 0.24.0.
 """
-@kwdef struct FetchOptions
-    version::Cuint                  = 1
-    callbacks::RemoteCallbacks
-    prune::Cint                     = Consts.FETCH_PRUNE_UNSPECIFIED
-    update_fetchhead::Cint          = 1
-    download_tags::Cint             = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions
+struct FetchOptions
+    opts::FetchOptionsStruct
+    cb_gcroot::Ref{Any}
+    function FetchOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
+        return new(FetchOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
     end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct
-    end
+end
+
+
+@kwdef struct CloneOptionsStruct
+    version::Cuint                      = 1
+    checkout_opts::CheckoutOptions
+    fetch_opts::FetchOptionsStruct
+    bare::Cint
+    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
+    checkout_branch::Cstring
+    repository_cb::Ptr{Void}
+    repository_cb_payload::Ptr{Void}
+    remote_cb::Ptr{Void}
+    remote_cb_payload::Ptr{Void}
 end
 
 """
@@ -317,17 +343,12 @@ The fields represent:
   * `remote_cb`: An optional callback used to create the [`GitRemote`](@ref) before making the clone from it.
   * `remote_cb_payload`: The payload for the remote callback.
 """
-@kwdef struct CloneOptions
-    version::Cuint                      = 1
-    checkout_opts::CheckoutOptions
-    fetch_opts::FetchOptions
-    bare::Cint
-    localclone::Cint                    = Consts.CLONE_LOCAL_AUTO
-    checkout_branch::Cstring
-    repository_cb::Ptr{Void}
-    repository_cb_payload::Ptr{Void}
-    remote_cb::Ptr{Void}
-    remote_cb_payload::Ptr{Void}
+struct CloneOptions
+    opts::CloneOptionsStruct
+    cb_gcroot::Ref{Any}
+    function CloneOptions(; fetch_opts::FetchOptions=FetchOptions(), kwargs...)
+        return new(CloneOptionsStruct(; kwargs..., fetch_opts=fetch_opts.opts), fetch_opts.cb_gcroot)
+    end
 end
 
 """
@@ -588,6 +609,18 @@ The fields represent:
     max_line::Csize_t                 = 0
 end
 
+@kwdef struct PushOptionsStruct
+    version::Cuint                     = 1
+    parallelism::Cint                  = 1
+    callbacks::RemoteCallbacksStruct
+    @static if LibGit2.VERSION >= v"0.25.0"
+        proxy_opts::ProxyOptions
+    end
+    @static if LibGit2.VERSION >= v"0.24.0"
+        custom_headers::StrArrayStruct
+    end
+end
+
 """
     LibGit2.PushOptions
 
@@ -605,15 +638,11 @@ The fields represent:
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
 """
-@kwdef struct PushOptions
-    version::Cuint                     = 1
-    parallelism::Cint                  = 1
-    callbacks::RemoteCallbacks
-    @static if LibGit2.VERSION >= v"0.25.0"
-        proxy_opts::ProxyOptions
-    end
-    @static if LibGit2.VERSION >= v"0.24.0"
-        custom_headers::StrArrayStruct
+struct PushOptions
+    opts::PushOptionsStruct
+    cb_gcroot::Ref{Any}
+    function PushOptions(; callbacks::RemoteCallbacks=RemoteCallbacks(), kwargs...)
+        return new(PushOptionsStruct(; kwargs..., callbacks=callbacks.cb), callbacks.gcroot)
     end
 end
 
@@ -835,6 +864,46 @@ function Base.show(io::IO, ce::ConfigEntry)
     print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
 end
 
+"""
+    split(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
+
+Break the `ConfigEntry` up to the following pieces: section, subsection, name, and value.
+
+# Examples
+Given the git configuration file containing:
+```
+[credential "https://example.com"]
+    username = me
+```
+
+The `ConfigEntry` would look like the following:
+
+```julia-repl
+julia> entry
+ConfigEntry("credential.https://example.com.username", "me")
+
+julia> split(entry)
+("credential", "https://example.com", "username", "me")
+```
+
+Refer to the [git config syntax documenation](https://git-scm.com/docs/git-config#_syntax)
+for more details.
+"""
+function Base.split(ce::ConfigEntry)
+    key = unsafe_string(ce.name)
+
+    # Determine the positions of the delimiters
+    subsection_delim = search(key, '.')
+    name_delim = rsearch(key, '.')
+
+    section = SubString(key, 1, subsection_delim - 1)
+    subsection = SubString(key, subsection_delim + 1, name_delim - 1)
+    name = SubString(key, name_delim + 1)
+    value = unsafe_string(ce.value)
+
+    return (section, subsection, name, value)
+end
+
 # Abstract object types
 abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
@@ -875,7 +944,7 @@ for (typ, owntyp, sup, cname) in [
                 obj = new(ptr)
                 if fin
                     Threads.atomic_add!(REFCOUNT, UInt(1))
-                    finalizer(obj, Base.close)
+                    finalizer(Base.close, obj)
                 end
                 return obj
             end
@@ -889,7 +958,7 @@ for (typ, owntyp, sup, cname) in [
                 obj = new(owner, ptr)
                 if fin
                     Threads.atomic_add!(REFCOUNT, UInt(1))
-                    finalizer(obj, Base.close)
+                    finalizer(Base.close, obj)
                 end
                 return obj
             end
@@ -931,7 +1000,7 @@ mutable struct GitSignature <: AbstractGitObject
     function GitSignature(ptr::Ptr{SignatureStruct})
         @assert ptr != C_NULL
         obj = new(ptr)
-        finalizer(obj, Base.close)
+        finalizer(Base.close, obj)
         return obj
     end
 end
@@ -1039,7 +1108,7 @@ Consts.OBJECT(ptr::Ptr{Void}) =
 """
     objtype(obj_type::Consts.OBJECT)
 
-Returns the type corresponding to the enum value.
+Return the type corresponding to the enum value.
 """
 function objtype(obj_type::Consts.OBJECT)
     if obj_type == Consts.OBJ_COMMIT
@@ -1059,49 +1128,76 @@ end
 
 import Base.securezero!
 
-"Abstract credentials payload"
-abstract type AbstractCredentials end
+abstract type AbstractCredential end
 
-"Credentials that support only `user` and `password` parameters"
-mutable struct UserPasswordCredentials <: AbstractCredentials
+"""
+    isfilled(cred::AbstractCredential) -> Bool
+
+Verifies that a credential is ready for use in authentication.
+"""
+isfilled(::AbstractCredential)
+
+"Credential that support only `user` and `password` parameters"
+mutable struct UserPasswordCredential <: AbstractCredential
     user::String
     pass::String
-    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    function UserPasswordCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prompt_if_incorrect)
-        finalizer(c, securezero!)
+    function UserPasswordCredential(user::AbstractString="", pass::AbstractString="")
+        c = new(user, pass)
+        finalizer(securezero!, c)
         return c
     end
-    UserPasswordCredentials(prompt_if_incorrect::Bool=false) = UserPasswordCredentials("","",prompt_if_incorrect)
+
+    # Deprecated constructors
+    function UserPasswordCredential(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool)
+        Base.depwarn(string(
+            "`UserPasswordCredential` no longer supports the `prompt_if_incorrect` parameter. ",
+            "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
+            "instead."), :UserPasswordCredential)
+        UserPasswordCredential(u, p)
+    end
+    UserPasswordCredential(prompt_if_incorrect::Bool) = UserPasswordCredential("","",prompt_if_incorrect)
 end
 
-function securezero!(cred::UserPasswordCredentials)
+function securezero!(cred::UserPasswordCredential)
     securezero!(cred.user)
     securezero!(cred.pass)
     return cred
 end
 
-function Base.:(==)(a::UserPasswordCredentials, b::UserPasswordCredentials)
+function Base.:(==)(a::UserPasswordCredential, b::UserPasswordCredential)
     a.user == b.user && a.pass == b.pass
 end
 
-"SSH credentials type"
-mutable struct SSHCredentials <: AbstractCredentials
+function isfilled(cred::UserPasswordCredential)
+    !isempty(cred.user) && !isempty(cred.pass)
+end
+
+"SSH credential type"
+mutable struct SSHCredential <: AbstractCredential
     user::String
     pass::String
     prvkey::String
     pubkey::String
-    prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
-    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prvkey,pubkey,prompt_if_incorrect)
-        finalizer(c, securezero!)
+    function SSHCredential(user::AbstractString="", pass::AbstractString="",
+                            prvkey::AbstractString="", pubkey::AbstractString="")
+        c = new(user, pass, prvkey, pubkey)
+        finalizer(securezero!, c)
         return c
     end
-    SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false) = SSHCredentials(u,p,"","",prompt_if_incorrect)
-    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","","","",prompt_if_incorrect)
+
+    # Deprecated constructors
+    function SSHCredential(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool)
+        Base.depwarn(string(
+            "`SSHCredential` no longer supports the `prompt_if_incorrect` parameter. ",
+            "Use the `allow_prompt` keyword in supported by `LibGit2.CredentialPayload` ",
+            "instead."), :SSHCredential)
+        SSHCredential(u, p, prvkey, pubkey)
+    end
+    SSHCredential(u::AbstractString, p::AbstractString, prompt_if_incorrect::Bool) = SSHCredential(u,p,"","",prompt_if_incorrect)
+    SSHCredential(prompt_if_incorrect::Bool) = SSHCredential("","","","",prompt_if_incorrect)
 end
 
-function securezero!(cred::SSHCredentials)
+function securezero!(cred::SSHCredential)
     securezero!(cred.user)
     securezero!(cred.pass)
     securezero!(cred.prvkey)
@@ -1109,76 +1205,162 @@ function securezero!(cred::SSHCredentials)
     return cred
 end
 
-function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
+function Base.:(==)(a::SSHCredential, b::SSHCredential)
     a.user == b.user && a.pass == b.pass && a.prvkey == b.prvkey && a.pubkey == b.pubkey
 end
 
-"Credentials that support caching"
-struct CachedCredentials <: AbstractCredentials
-    cred::Dict{String,AbstractCredentials}
-    CachedCredentials() = new(Dict{String,AbstractCredentials}())
+function isfilled(cred::SSHCredential)
+    !isempty(cred.user) && isfile(cred.prvkey) && isfile(cred.pubkey) &&
+    (!isempty(cred.pass) || !is_passphrase_required(cred.prvkey))
 end
 
-"Obtain the cached credentials for the given host+protocol (credid), or return and store the default if not found"
-get_creds!(collection::CachedCredentials, credid, default) = get!(collection.cred, credid, default)
+"Caches credential information for re-use"
+struct CachedCredentials
+    cred::Dict{String,AbstractCredential}
+    CachedCredentials() = new(Dict{String,AbstractCredential}())
+end
+
+Base.haskey(cache::CachedCredentials, cred_id) = Base.haskey(cache.cred, cred_id)
+Base.getindex(cache::CachedCredentials, cred_id) = Base.getindex(cache.cred, cred_id)
+Base.get!(cache::CachedCredentials, cred_id, default) = Base.get!(cache.cred, cred_id, default)
 
 function securezero!(p::CachedCredentials)
     foreach(securezero!, values(p.cred))
     return p
 end
 
+function approve(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
+    cred_id = credential_identifier(url)
+    cache.cred[cred_id] = cred
+    nothing
+end
+
+function reject(cache::CachedCredentials, cred::AbstractCredential, url::AbstractString)
+    cred_id = credential_identifier(url)
+    if haskey(cache.cred, cred_id)
+        delete!(cache.cred, cred_id)
+    end
+    nothing
+end
+
 """
     LibGit2.CredentialPayload
 
-Retains state between multiple calls to the credential callback. A single
-`CredentialPayload` instance will be used when authentication fails for a URL but different
-instances will be used when the URL has changed.
+Retains the state between multiple calls to the credential callback for the same URL.
+A `CredentialPayload` instance is expected to be `reset!` whenever it will be used with a
+different URL.
 """
 mutable struct CredentialPayload <: Payload
-    explicit::Nullable{AbstractCredentials}
+    explicit::Nullable{AbstractCredential}
     cache::Nullable{CachedCredentials}
+    allow_ssh_agent::Bool    # Allow the use of the SSH agent to get credentials
+    allow_git_helpers::Bool  # Allow the use of git credential helpers
+    allow_prompt::Bool       # Allow prompting the user for credentials
+
+    config::GitConfig
 
     # Ephemeral state fields
-    credential::Nullable{AbstractCredentials}
+    credential::Nullable{AbstractCredential}
     first_pass::Bool
-    use_ssh_agent::Char
+    use_ssh_agent::Bool
+    use_env::Bool
+    use_git_helpers::Bool
+    remaining_prompts::Int
+
+    url::String
     scheme::String
     username::String
     host::String
-    path::String
 
-    function CredentialPayload(credential::Nullable{<:AbstractCredentials}, cache::Nullable{CachedCredentials})
-        payload = new(credential, cache)
+    function CredentialPayload(
+            credential::Nullable{<:AbstractCredential}=Nullable{AbstractCredential}(),
+            cache::Nullable{CachedCredentials}=Nullable{CachedCredentials}(),
+            config::GitConfig=GitConfig();
+            allow_ssh_agent::Bool=true,
+            allow_git_helpers::Bool=true,
+            allow_prompt::Bool=true)
+
+        payload = new(credential, cache, allow_ssh_agent, allow_git_helpers, allow_prompt, config)
         return reset!(payload)
     end
 end
 
-function CredentialPayload(credential::AbstractCredentials)
-    CredentialPayload(Nullable(credential), Nullable{CachedCredentials}())
+function CredentialPayload(credential::AbstractCredential; kwargs...)
+    CredentialPayload(Nullable(credential), Nullable{CachedCredentials}(); kwargs...)
 end
 
-function CredentialPayload(cache::CachedCredentials)
-    CredentialPayload(Nullable{AbstractCredentials}(), Nullable(cache))
-end
-
-function CredentialPayload()
-    CredentialPayload(Nullable{AbstractCredentials}(), Nullable{CachedCredentials}())
+function CredentialPayload(cache::CachedCredentials; kwargs...)
+    CredentialPayload(Nullable{AbstractCredential}(), Nullable(cache); kwargs...)
 end
 
 """
-    reset!(payload) -> CredentialPayload
+    reset!(payload, [config]) -> CredentialPayload
 
 Reset the `payload` state back to the initial values so that it can be used again within
-the credential callback.
+the credential callback. If a `config` is provided the configuration will also be updated.
 """
-function reset!(p::CredentialPayload)
-    p.credential = Nullable{AbstractCredentials}()
+function reset!(p::CredentialPayload, config::GitConfig=p.config)
+    p.config = config
+    p.credential = Nullable{AbstractCredential}()
     p.first_pass = true
-    p.use_ssh_agent = 'Y'
+    p.use_ssh_agent = p.allow_ssh_agent
+    p.use_env = true
+    p.use_git_helpers = p.allow_git_helpers
+    p.remaining_prompts = p.allow_prompt ? 3 : 0
+    p.url = ""
     p.scheme = ""
     p.username = ""
     p.host = ""
-    p.path = ""
 
     return p
+end
+
+"""
+    approve(payload::CredentialPayload; shred::Bool=true) -> Void
+
+Store the `payload` credential for re-use in a future authentication. Should only be called
+when authentication was successful.
+
+The `shred` keyword controls whether sensitive information in the payload credential field
+should be destroyed. Should only be set to `false` during testing.
+"""
+function approve(p::CredentialPayload; shred::Bool=true)
+    isnull(p.credential) && return  # No credentials were used
+    cred = unsafe_get(p.credential)
+
+    if !isnull(p.cache)
+        approve(unsafe_get(p.cache), cred, p.url)
+        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
+    end
+    if p.allow_git_helpers
+        approve(p.config, cred, p.url)
+    end
+
+    shred && securezero!(cred)
+    nothing
+end
+
+"""
+    reject(payload::CredentialPayload; shred::Bool=true) -> Void
+
+Discard the `payload` credential from begin re-used in future authentication. Should only be
+called when authentication was unsuccessful.
+
+The `shred` keyword controls whether sensitive information in the payload credential field
+should be destroyed. Should only be set to `false` during testing.
+"""
+function reject(p::CredentialPayload; shred::Bool=true)
+    isnull(p.credential) && return  # No credentials were used
+    cred = unsafe_get(p.credential)
+
+    if !isnull(p.cache)
+        reject(unsafe_get(p.cache), cred, p.url)
+        shred = false  # Avoid wiping `cred` as this would also wipe the cached copy
+    end
+    if p.allow_git_helpers
+        reject(p.config, cred, p.url)
+    end
+
+    shred && securezero!(cred)
+    nothing
 end

@@ -4,21 +4,24 @@
 include("testenv.jl")
 
 replstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), MIME("text/plain"), x), x)
+showstr(x) = sprint((io,x) -> show(IOContext(io, :limit => true, :displaysize => (24, 80)), x), x)
 
-@test replstr(Array{Any}(2)) == "2-element Array{Any,1}:\n #undef\n #undef"
-@test replstr(Array{Any}(2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
-@test replstr(Array{Any}(2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
-@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0f10"
+
+@test replstr(Array{Any}(uninitialized, 2)) == "2-element Array{Any,1}:\n #undef\n #undef"
+@test replstr(Array{Any}(uninitialized, 2,2)) == "2×2 Array{Any,2}:\n #undef  #undef\n #undef  #undef"
+@test replstr(Array{Any}(uninitialized, 2,2,2)) == "2×2×2 Array{Any,3}:\n[:, :, 1] =\n #undef  #undef\n #undef  #undef\n\n[:, :, 2] =\n #undef  #undef\n #undef  #undef"
+@test replstr([1f10]) == "1-element Array{Float32,1}:\n 1.0e10"
 
 struct T5589
     names::Vector{String}
 end
-@test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
+@test replstr(T5589(Vector{String}(uninitialized, 100))) == "$(curmod_prefix)T5589([#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
-@test replstr(parse("mutable struct X end")) == ":(mutable struct X\n      #= none:1 =#\n  end)"
-@test replstr(parse("struct X end")) == ":(struct X\n      #= none:1 =#\n  end)"
+@test replstr(Meta.parse("mutable struct X end")) == ":(mutable struct X\n      #= none:1 =#\n  end)"
+@test replstr(Meta.parse("struct X end")) == ":(struct X\n      #= none:1 =#\n  end)"
+
 let s = "ccall(:f, Int, (Ptr{Void},), &x)"
-    @test replstr(parse(s)) == ":($s)"
+    @test replstr(Meta.parse(s)) == ":($s)"
 end
 
 # recursive array printing
@@ -39,9 +42,9 @@ macro test_repr(x)
         # This could produce a few false positives, but until string
         # interpolation works we don't really have a choice.
         let
-            local x1 = parse($x)
-            local x2 = eval(parse(repr(x1)))
-            local x3 = eval(parse(repr(x2)))
+            local x1 = Meta.parse($x)
+            local x2 = eval(Meta.parse(repr(x1)))
+            local x3 = eval(Meta.parse(repr(x2)))
             if x3 != x1
                 error(string(
                     "repr test failed:",
@@ -105,8 +108,8 @@ end
 
 # Complex
 
-# parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
-@test iszero(eval(eval(parse(repr(:($(1 + 2im) - $(1 + 2im)))))))
+# Meta.parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
+@test iszero(eval(eval(Meta.parse(repr(:($(1 + 2im) - $(1 + 2im)))))))
 
 
 # control structures (shamelessly stolen from base/bitarray.jl)
@@ -118,7 +121,7 @@ end
     # line meta
     dims::NTuple{N,Int}
     # line meta
-    function BitArray(dims::Int...)
+    function BitArray(uninitialized, dims::Int...)
         # line meta
         if length(dims) != N
             # line meta
@@ -139,7 +142,7 @@ end
         # line meta
         nc = num_bit_chunks(n)
         # line meta
-        chunks = Array{UInt64,1}(nc)
+        chunks = Vector{UInt64}(uninitialized, nc)
         # line meta
         if nc > 0
             # line meta
@@ -327,8 +330,6 @@ end
 @test_repr "baremodule X
 # line meta
 # line meta
-importall ..A.b
-# line meta
 import ...B.c
 # line meta
 import D
@@ -344,11 +345,11 @@ export D, E, F
 end"
 
 # issue #19840
-@test_repr "Array{Int}(0)"
-@test_repr "Array{Int}(0,0)"
-@test_repr "Array{Int}(0,0,0)"
-@test_repr "Array{Int}(0,1)"
-@test_repr "Array{Int}(0,0,1)"
+@test_repr "Array{Int}(uninitialized, 0)"
+@test_repr "Array{Int}(uninitialized, 0,0)"
+@test_repr "Array{Int}(uninitialized, 0,0,0)"
+@test_repr "Array{Int}(uninitialized, 0,1)"
+@test_repr "Array{Int}(uninitialized, 0,0,1)"
 
 # issue #8994
 @test_repr "get! => 2"
@@ -360,7 +361,7 @@ end"
 # issue #9474
 for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
     local s
-    @test sprint(show, parse(s)) == ":("*s*")"
+    @test sprint(show, Meta.parse(s)) == ":("*s*")"
 end
 
 # parametric type instantiation printing
@@ -368,8 +369,8 @@ struct TParametricPrint{a}; end
 @test sprint(show, :(TParametricPrint{false}())) == ":(TParametricPrint{false}())"
 
 # issue #9797
-let q1 = parse(repr(:("$(a)b"))),
-    q2 = parse(repr(:("$ab")))
+let q1 = Meta.parse(repr(:("$(a)b"))),
+    q2 = Meta.parse(repr(:("$ab")))
     @test isa(q1, Expr)
     @test q1.args[1].head === :string
     @test q1.args[1].args == [:a, "b"]
@@ -381,8 +382,8 @@ end
 
 x8d003 = 2
 let a = Expr(:quote,Expr(:$,:x8d003))
-    @test eval(parse(repr(a))) == a
-    @test eval(eval(parse(repr(a)))) == 2
+    @test eval(Meta.parse(repr(a))) == a
+    @test eval(eval(Meta.parse(repr(a)))) == 2
 end
 
 # issue #9865
@@ -510,7 +511,7 @@ end
 # issue #12960
 mutable struct T12960 end
 let
-    A = speye(3)
+    A = sparse(1.0I, 3, 3)
     B = similar(A, T12960)
     @test sprint(show, B)  == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
     @test sprint(print, B) == "\n  [1, 1]  =  #undef\n  [2, 2]  =  #undef\n  [3, 3]  =  #undef"
@@ -553,16 +554,16 @@ let repr = sprint(show, "text/html", methods(f16580))
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
-    @test contains(Base.url(first(methods(eigs))),"https://github.com/JuliaLang/julia/tree/v$VERSION/base/linalg/arnoldi.jl#L")
+    @test contains(Base.url(first(methods(sin))),"https://github.com/JuliaLang/julia/tree/v$VERSION/base/missing.jl#L")
 else
-    @test contains(Base.url(first(methods(eigs))),"https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/linalg/arnoldi.jl#L")
+    @test contains(Base.url(first(methods(sin))),"https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/missing.jl#L")
 end
 
 # print_matrix should be able to handle small and large objects easily, test by
 # calling show. This also indirectly tests print_matrix_row, which
 # is used repeatedly by print_matrix.
 # This fits on screen:
-@test replstr(eye(10)) == "10×10 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
+@test replstr(Matrix(1.0I, 10, 10)) == "10×10 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0  0.0\n 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  1.0"
 # an array too long vertically to fit on screen, and too long horizontally:
 @test replstr(collect(1.:100.)) == "100-element Array{Float64,1}:\n   1.0\n   2.0\n   3.0\n   4.0\n   5.0\n   6.0\n   7.0\n   8.0\n   9.0\n  10.0\n   ⋮  \n  92.0\n  93.0\n  94.0\n  95.0\n  96.0\n  97.0\n  98.0\n  99.0\n 100.0"
 @test replstr(collect(1.:100.)') == "1×100 RowVector{Float64,Array{Float64,1}}:\n 1.0  2.0  3.0  4.0  5.0  6.0  7.0  …  95.0  96.0  97.0  98.0  99.0  100.0"
@@ -710,9 +711,9 @@ let io = IOBuffer()
 end
 
 # PR 17117
-# test show array
-let s = IOBuffer(Array{UInt8}(0), true, true)
-    Base.showarray(s, [1, 2, 3], false, header = false)
+# test print_array
+let s = IOBuffer(Vector{UInt8}(), true, true)
+    Base.print_array(s, [1, 2, 3])
     @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
 end
 
@@ -759,10 +760,10 @@ end
 let repr = sprint(dump, sin)
     @test repr == "sin (function of type typeof(sin))\n"
 end
-let repr = sprint(dump, Base.Test)
-    @test repr == "Module Base.Test\n"
+let repr = sprint(dump, Test)
+    @test repr == "Module Test\n"
 end
-let a = Array{Any}(10000)
+let a = Vector{Any}(uninitialized, 10000)
     a[2] = "elemA"
     a[4] = "elemB"
     a[11] = "elemC"
@@ -783,7 +784,7 @@ end
 @test_repr "(x for a in b, c in d for e in f)"
 
 for op in (:(.=), :(.+=), :(.&=))
-    @test repr(parse("x $op y")) == ":(x $op y)"
+    @test repr(Meta.parse("x $op y")) == ":(x $op y)"
 end
 
 # pretty-printing of compact broadcast expressions (#17289)
@@ -802,10 +803,7 @@ end
 # don't use julia-specific `f` in Float32 printing (PR #18053)
 @test sprint(print, 1f-7) == "1.0e-7"
 
-# test that the REPL TextDisplay works for displaying arbitrary textual MIME types
 let d = TextDisplay(IOBuffer())
-    display(d, "text/csv", [3 1 4])
-    @test String(take!(d.io)) == "3,1,4\n"
     @test_throws MethodError display(d, "text/foobar", [3 1 4])
     try
         display(d, "text/foobar", [3 1 4])
@@ -857,6 +855,7 @@ end
 @test static_shown(Symbol("")) == "Symbol(\"\")"
 @test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
 @test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
+@test static_shown(UnionAll) == "UnionAll"
 
 @test static_shown(QuoteNode(:x)) == ":(:x)"
 
@@ -922,7 +921,7 @@ end
 @testset "display arrays non-compactly when size(⋅, 2) == 1" begin
     # 0-dim
     @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
-    A = Array{Pair}(); A[] = 1=>2
+    A = Array{Pair,0}(uninitialized); A[] = 1=>2
     @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
     # 1-dim
     @test replstr(zeros(Complex{Int}, 2)) ==
@@ -946,8 +945,7 @@ end
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
-            Base.showarray(IOContext(buf, :displaysize => (rows, 80), :limit => true),
-                           A, false, header=true)
+            Base._display(IOContext(buf, :displaysize => (rows, 80), :limit => true), A)
             String(take!(buf))
         end
     end
@@ -1000,4 +998,67 @@ let x = TypeVar(:_), y = TypeVar(:_)
     y = TypeVar(:a)
     z = TypeVar(:a)
     @test repr(UnionAll(z, UnionAll(x, UnionAll(y, Tuple{x,y,z})))) == "Tuple{a1,a2,a} where a2 where a1 where a"
+end
+
+@testset "showarg" begin
+    A = reshape(collect(Int16(1):Int16(2*3*5)), 2, 3, 5)
+    @test summary(A) == "2×3×5 Array{Int16,3}"
+    v = view(A, :, 3, 2:5)
+    @test summary(v) == "2×4 view(::Array{Int16,3}, :, 3, 2:5) with eltype Int16"
+    r = reshape(v, 4, 2)
+    @test summary(r) == "4×2 reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2) with eltype Int16"
+    p = PermutedDimsArray(r, (2, 1))
+    @test summary(p) == "2×4 PermutedDimsArray(reshape(view(::Array{Int16,3}, :, 3, 2:5), 4, 2), (2, 1)) with eltype Int16"
+end
+
+@testset "Methods" begin
+    m = @which sin(1.0)
+    io = IOBuffer()
+    show(io, "text/html", m)
+    s = String(take!(io))
+    @test contains(s, " in Base.Math ")
+end
+
+module TestShowType
+    export TypeA
+    struct TypeA end
+end
+
+@testset "module prefix when printing type" begin
+    @test sprint(show, TestShowType.TypeA) == "$(@__MODULE__).TestShowType.TypeA"
+
+    b = IOBuffer()
+    show(IOContext(b, :module => @__MODULE__), TestShowType.TypeA)
+    @test String(take!(b)) == "$(@__MODULE__).TestShowType.TypeA"
+
+    b = IOBuffer()
+    show(IOContext(b, :module => TestShowType), TestShowType.TypeA)
+    @test String(take!(b)) == "TypeA"
+
+    using .TestShowType
+
+    @test sprint(show, TypeA) == "$(@__MODULE__).TestShowType.TypeA"
+
+    b = IOBuffer()
+    show(IOContext(b, :module => @__MODULE__), TypeA)
+    @test String(take!(b)) == "TypeA"
+end
+
+@testset "typeinfo" begin
+    @test replstr([[Int16(1)]]) == "1-element Array{Array{Int16,1},1}:\n [1]"
+    @test showstr([[Int16(1)]]) == "Array{Int16,1}[[1]]"
+    @test showstr(Set([[Int16(1)]])) == "Set(Array{Int16,1}[[1]])"
+    @test showstr([Float16(1)]) == "Float16[1.0]"
+    @test showstr([[Float16(1)]]) == "Array{Float16,1}[[1.0]]"
+    @test replstr(Real[Float16(1)]) == "1-element Array{Real,1}:\n Float16(1.0)"
+    @test replstr(Array{Real}[Real[1]]) == "1-element Array{Array{Real,N} where N,1}:\n [1]"
+    @testset "nested Any eltype" begin
+        x = Any[Any[Any[1]]]
+        # The element of x (i.e. x[1]) has an eltype which can't be deduced
+        # from eltype(x), so this must also be printed
+        @test replstr(x) == "1-element Array{Any,1}:\n Any[Any[1]]"
+    end
+    # Issue #25038
+    A = [0.0, 1.0]
+    @test replstr(view(A, [1], :)) == "1×1 view(::Array{Float64,2}, [1], :) with eltype Float64:\n 0.0"
 end

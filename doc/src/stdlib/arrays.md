@@ -8,15 +8,19 @@ Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
 Core.Array(::Any)
+Core.Array(::Any, ::Any)
+Core.Uninitialized
+Core.uninitialized
 Base.Vector
 Base.Vector(::Any)
+Base.Vector(::Any, ::Any)
 Base.Matrix
-Base.Matrix(::Any, ::Any)
+Base.Matrix(::Any, ::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
 Base.BitArray
-Base.BitArray(::Integer...)
+Base.BitArray(::Uninitialized, ::Integer...)
 Base.BitArray(::Any)
 Base.trues
 Base.falses
@@ -24,7 +28,6 @@ Base.fill
 Base.fill!
 Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)
-Base.eye
 Base.linspace
 Base.logspace
 Base.Random.randsubseq
@@ -63,6 +66,17 @@ Base.Broadcast.broadcast!
 Base.@__dot__
 Base.Broadcast.broadcast_getindex
 Base.Broadcast.broadcast_setindex!
+```
+
+For specializing broadcast on custom types, see
+```@docs
+Base.BroadcastStyle
+Base.broadcast_similar
+Base.broadcast_indices
+Base.Broadcast.Scalar
+Base.Broadcast.AbstractArrayStyle
+Base.Broadcast.ArrayStyle
+Base.Broadcast.DefaultArrayStyle
 ```
 
 ## Indexing and assignment
@@ -106,23 +120,18 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
-Base.contains(::Function, ::Any, ::Any)
 Base.find(::Any)
 Base.find(::Function, ::Any)
 Base.findn
 Base.findnz
 Base.findfirst(::Any)
-Base.findfirst(::Any, ::Any)
 Base.findfirst(::Function, ::Any)
 Base.findlast(::Any)
-Base.findlast(::Any, ::Any)
 Base.findlast(::Function, ::Any)
 Base.findnext(::Any, ::Integer)
 Base.findnext(::Function, ::Any, ::Integer)
-Base.findnext(::Any, ::Any, ::Integer)
 Base.findprev(::Any, ::Integer)
 Base.findprev(::Function, ::Any, ::Integer)
-Base.findprev(::Any, ::Any, ::Integer)
 Base.permutedims
 Base.permutedims!
 Base.PermutedDimsArray
@@ -138,10 +147,7 @@ Base.cumprod
 Base.cumprod!
 Base.cumsum
 Base.cumsum!
-Base.cumsum_kbn
-Base.crc32c
 Base.LinAlg.diff
-Base.LinAlg.gradient
 Base.repeat(::AbstractArray)
 Base.rot180
 Base.rotl90
@@ -149,7 +155,6 @@ Base.rotr90
 Base.reducedim
 Base.mapreducedim
 Base.mapslices
-Base.sum_kbn
 ```
 
 ## Combinatorics
@@ -191,12 +196,9 @@ Base.SparseArrays.SparseMatrixCSC
 Base.SparseArrays.sparse
 Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse
-Base.full
 Base.SparseArrays.nnz
 Base.SparseArrays.spzeros
 Base.SparseArrays.spones
-Base.SparseArrays.speye(::Type, ::Integer, ::Integer)
-Base.SparseArrays.speye(::SparseMatrixCSC)
 Base.SparseArrays.spdiagm
 Base.SparseArrays.sprand
 Base.SparseArrays.sprandn

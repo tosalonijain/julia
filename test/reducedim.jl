@@ -98,10 +98,10 @@ end
 @test @inferred(sum(UInt8[1], 1)) == [1]
 
 # Complex types
-@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.sum(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.sum(abs2, [1.0+1.0im], 1))) == Vector{Float64}
-@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{Complex128}
+@test typeof(@inferred(prod([1.0+1.0im], 1))) == Vector{ComplexF64}
 @test typeof(@inferred(Base.prod(abs, [1.0+1.0im], 1))) == Vector{Float64}
 @test typeof(@inferred(Base.prod(abs2, [1.0+1.0im], 1))) == Vector{Float64}
 
@@ -122,7 +122,7 @@ let rt = Base.return_types(reducedim, Tuple{Function, Array{Float64, 3}, Int, Fl
 end
 
 @testset "empty cases" begin
-    A = Array{Int}(0,1)
+    A = Matrix{Int}(uninitialized, 0,1)
     @test sum(A) === 0
     @test prod(A) === 1
     @test_throws ArgumentError minimum(A)
@@ -336,4 +336,12 @@ for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
     @test_throws ArgumentError sum(abs2, Areduc, region)
     @test_throws ArgumentError maximum(abs, Areduc, region)
     @test_throws ArgumentError minimum(abs, Areduc, region)
+end
+
+# check type of result
+under_test = [UInt8, Int8, Int32, Int64, BigInt]
+@testset "type of sum(::Array{$T}" for T in under_test
+    result = sum(T[1 2 3; 4 5 6; 7 8 9], 2)
+    @test result == hcat([6, 15, 24])
+    @test eltype(result) === typeof(Base.promote_sys_size_add(zero(T)))
 end

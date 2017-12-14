@@ -232,7 +232,7 @@ function LinSpace(start, stop, len::Integer)
 end
 
 """
-    linspace(start, stop, n=50)
+    linspace(start, stop, n)
 
 Construct a range of `n` linearly spaced elements from `start` to `stop`.
 
@@ -241,8 +241,8 @@ julia> linspace(1.3,2.9,9)
 1.3:0.2:2.9
 ```
 """
-linspace(start, stop, len::Real=50) = linspace(promote(start, stop)..., Int(len))
-linspace(start::T, stop::T, len::Real=50) where {T} = linspace(start, stop, Int(len))
+linspace(start, stop, len::Real) = linspace(promote(start, stop)..., Int(len))
+linspace(start::T, stop::T, len::Real) where {T} = linspace(start, stop, Int(len))
 
 linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
 linspace(start::T, stop::T, len::Integer) where {T<:Integer} = linspace(Float64, start, stop, len, 1)
@@ -318,29 +318,29 @@ function print_range(io::IO, r::AbstractRange,
 end
 
 """
-    logspace(start::Real, stop::Real, n::Integer=50; base=10)
+    logspace(start::Real, stop::Real, n::Integer; base=10)
 
 Construct a vector of `n` logarithmically spaced numbers from `base^start` to `base^stop`.
 
 ```jldoctest
 julia> logspace(1.,10.,5)
 5-element Array{Float64,1}:
-   10.0
- 1778.28
-    3.16228e5
-    5.62341e7
-    1.0e10
+     10.0
+   1778.2794100389228
+ 316227.7660168379
+      5.623413251903491e7
+      1.0e10
 
 julia> logspace(1.,10.,5,base=2)
 5-element Array{Float64,1}:
     2.0
-    9.51366
-   45.2548
-  215.269
+    9.513656920021768
+   45.254833995939045
+  215.2694823049509
  1024.0
 ```
 """
-logspace(start::Real, stop::Real, n::Integer=50; base=10) = base.^linspace(start, stop, n)
+logspace(start::Real, stop::Real, n::Integer; base=10) = base.^linspace(start, stop, n)
 
 ## interface implementations
 
@@ -885,7 +885,7 @@ function vcat(rs::AbstractRange{T}...) where T
     for ra in rs
         n += length(ra)
     end
-    a = Vector{T}(n)
+    a = Vector{T}(uninitialized, n)
     i = 1
     for ra in rs, x in ra
         @inbounds a[i] = x

@@ -67,7 +67,7 @@ julia> squeeze(a,3)
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
         1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
-        size(A, dims[i]) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
+        length(indices(A, dims[i])) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
             dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
         end
@@ -75,10 +75,10 @@ function squeeze(A::AbstractArray, dims::Dims)
     d = ()
     for i = 1:ndims(A)
         if !in(i, dims)
-            d = tuple(d..., size(A, i))
+            d = tuple(d..., indices(A, i))
         end
     end
-    reshape(A, d::typeof(_sub(size(A), dims)))
+    reshape(A, d::typeof(_sub(indices(A), dims)))
 end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
@@ -164,9 +164,11 @@ function flipdim(A::AbstractArray, d::Integer)
         end
         return B
     end
-    alli = [ indices(B,n) for n in 1:nd ]
-    for i in indsd
-        B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
+    let B=B # workaround #15276
+        alli = [ indices(B,n) for n in 1:nd ]
+        for i in indsd
+            B[[ n==d ? sd-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
+        end
     end
     return B
 end
@@ -234,73 +236,6 @@ See also [`circshift!`](@ref).
 """
 function circshift(a::AbstractArray, shiftamt)
     circshift!(similar(a), a, map(Integer, (shiftamt...,)))
-end
-
-# Uses K-B-N summation
-function cumsum_kbn(v::AbstractVector{T}) where T<:AbstractFloat
-    r = similar(v)
-    if isempty(v); return r; end
-
-    inds = indices(v, 1)
-    i1 = first(inds)
-    s = r[i1] = v[i1]
-    c = zero(T)
-    for i=i1+1:last(inds)
-        vi = v[i]
-        t = s + vi
-        if abs(s) >= abs(vi)
-            c += ((s-t) + vi)
-        else
-            c += ((vi-t) + s)
-        end
-        s = t
-        r[i] = s+c
-    end
-    return r
-end
-
-# Uses K-B-N summation
-# TODO: Needs a separate IndexCartesian method, this is only fast for IndexLinear
-
-"""
-    cumsum_kbn(A, [dim::Integer=1])
-
-Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation
-algorithm for additional accuracy. The dimension defaults to 1.
-"""
-function cumsum_kbn(A::AbstractArray{T}, axis::Integer=1) where T<:AbstractFloat
-    dimsA = size(A)
-    ndimsA = ndims(A)
-    axis_size = dimsA[axis]
-    axis_stride = 1
-    for i = 1:(axis-1)
-        axis_stride *= size(A,i)
-    end
-
-    if axis_size <= 1
-        return A
-    end
-
-    B = similar(A)
-    C = similar(A)
-
-    for i = 1:length(A)
-        if div(i-1, axis_stride) % axis_size == 0
-            B[i] = A[i]
-            C[i] = zero(T)
-        else
-            s = B[i-axis_stride]
-            Ai = A[i]
-            B[i] = t = s + Ai
-            if abs(s) >= abs(Ai)
-                C[i] = C[i-axis_stride] + ((s-t) + Ai)
-            else
-                C[i] = C[i-axis_stride] + ((Ai-t) + s)
-            end
-        end
-    end
-
-    return B + C
 end
 
 ## Other array functions ##
@@ -399,7 +334,7 @@ function repeat(A::AbstractArray;
 end
 
 rep_kw2tup(n::Integer) = (n,)
-rep_kw2tup(v::AbstractArray{<:Integer}) = (v...)
+rep_kw2tup(v::AbstractArray{<:Integer}) = (v...,)
 rep_kw2tup(t::Tuple) = t
 
 rep_shapes(A, i, o) = _rshps((), (), size(A), i, o)
@@ -422,6 +357,10 @@ _rshps(shp, shp_i, sz, i, ::Tuple{}) =
 _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     "($n) cannot be less than number of dimensions of input ($N)"))
 
+# We need special handling when repeating arrays of arrays
+cat_fill!(R, X, inds) = (R[inds...] = X)
+cat_fill!(R, X::AbstractArray, inds) = fill!(view(R, inds...), X)
+
 @noinline function _repeat(A::AbstractArray, inner, outer)
     shape, inner_shape = rep_shapes(A, inner, outer)
 
@@ -440,7 +379,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
                 n = inner[i]
                 inner_indices[i] = (1:n) .+ ((c[i] - 1) * n)
             end
-            fill!(view(R, inner_indices...), A[c])
+            cat_fill!(R, A[c], inner_indices)
         end
     end
 

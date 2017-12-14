@@ -2,7 +2,8 @@
 
 module PermutedDimsArrays
 
-export permutedims, PermutedDimsArray
+import Base: permutedims, permutedims!
+export PermutedDimsArray
 
 # Some day we will want storage-order-aware iteration, so put perm in the parameters
 struct PermutedDimsArray{T,N,perm,iperm,AA<:AbstractArray} <: AbstractArray{T,N}
@@ -77,11 +78,10 @@ end
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
 """
-    permutedims(A, perm)
+    permutedims(A::AbstractArray, perm)
 
 Permute the dimensions of array `A`. `perm` is a vector specifying a permutation of length
-`ndims(A)`. This is a generalization of transpose for multi-dimensional arrays. Transpose is
-equivalent to `permutedims(A, [2,1])`.
+`ndims(A)`.
 
 See also: [`PermutedDimsArray`](@ref).
 
@@ -108,10 +108,25 @@ julia> permutedims(A, [3, 2, 1])
  6  8
 ```
 """
-function Base.permutedims(A::AbstractArray, perm)
+function permutedims(A::AbstractArray, perm)
     dest = similar(A, genperm(indices(A), perm))
     permutedims!(dest, A, perm)
 end
+
+"""
+    permutedims(m::AbstractMatrix)
+
+Permute the dimensions of the matrix `m`, by flipping the elements across the diagonal of
+the matrix. Differs from [`transpose`](@ref) in that the operation is not recursive.
+"""
+permutedims(A::AbstractMatrix) = permutedims(A, (2,1))
+
+"""
+    permutedims(v::AbstractVector)
+
+Reshape vector `v` into a `1 × length(v)` row matrix.
+"""
+permutedims(v::AbstractVector) = reshape(v, (1, length(v)))
 
 """
     permutedims!(dest, src, perm)
@@ -124,7 +139,7 @@ regions.
 
 See also [`permutedims`](@ref).
 """
-function Base.permutedims!(dest, src::AbstractArray, perm)
+function permutedims!(dest, src::AbstractArray, perm)
     Base.checkdims_perm(dest, src, perm)
     P = PermutedDimsArray(dest, invperm(perm))
     _copy!(P, src)
@@ -148,7 +163,7 @@ function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
         copy!(parent(P), src) # it's not permuted
     else
         R1 = CartesianRange(indices(src)[1:d])
-        d1 = findfirst(perm, d+1)  # first permuted dim of dest
+        d1 = findfirst(equalto(d+1), perm)  # first permuted dim of dest
         R2 = CartesianRange(indices(src)[d+2:d1-1])
         R3 = CartesianRange(indices(src)[d1+1:end])
         _permutedims!(P, src, R1, R2, R3, d+1, d1)
@@ -184,6 +199,13 @@ end
         end
     end
     P
+end
+
+function Base.showarg(io::IO, A::PermutedDimsArray{T,N,perm}, toplevel) where {T,N,perm}
+    print(io, "PermutedDimsArray(")
+    Base.showarg(io, parent(A), false)
+    print(io, ", ", perm, ')')
+    toplevel && print(io, " with eltype ", eltype(A))
 end
 
 end

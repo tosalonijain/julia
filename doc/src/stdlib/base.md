@@ -9,8 +9,6 @@ Functions are grouped by topic below.
 
 Some general notes:
 
-  * Except for functions in built-in modules (`Pkg`, `Collections`, `Test`
-    and `Profile`), all functions documented here are directly available for use in programs.
   * To use module functions, use `import Module` to import the module, and `Module.fn(x)` to use the
     functions.
   * Alternatively, `using Module` will import all exported `Module` functions into the current namespace.
@@ -25,7 +23,7 @@ Base.quit
 Base.atexit
 Base.atreplinit
 Base.isinteractive
-Base.whos
+Base.varinfo
 Base.summarysize
 Base.edit(::AbstractString, ::Integer)
 Base.edit(::Any)
@@ -50,8 +48,61 @@ Base.methods
 Base.methodswith
 Base.@show
 Base.versioninfo
-Base.workspace
 ans
+```
+
+## Keywords
+
+```@docs
+module
+export
+import
+using
+baremodule
+function
+macro
+return
+do
+begin
+end
+let
+if
+for
+while
+break
+continue
+try
+finally
+quote
+local
+global
+const
+struct
+mutable struct
+abstract type
+primitive type
+...
+;
+```
+
+## Base Modules
+```@docs
+Base.BLAS
+Base.Docs
+Base.Iterators
+Base.LAPACK
+Base.LibGit2
+Base.Libc
+Base.Libdl
+Base.LinAlg
+Base.Markdown
+Base.Meta
+Base.Pkg
+Base.Serializer
+Base.SparseArrays
+Base.StackTraces
+Base.Sys
+Base.Threads
 ```
 
 ## All Objects
@@ -134,8 +185,10 @@ Base.method_exists
 Core.applicable
 Core.invoke
 Base.invokelatest
+new
 Base.:(|>)
 Base.:(∘)
+Base.equalto
 ```
 
 ## Syntax
@@ -155,8 +208,6 @@ Base.@gensym
 Base.@goto
 Base.@label
 Base.@polly
-Base.parse(::AbstractString, ::Int)
-Base.parse(::AbstractString)
 ```
 
 ## Nullables
@@ -166,6 +217,14 @@ Base.Nullable
 Base.get(::Nullable, ::Any)
 Base.isnull
 Base.unsafe_get
+```
+
+## Missing Values
+```@docs
+Base.Missing
+Base.missing
+Base.ismissing
+Base.skipmissing
 ```
 
 ## System
@@ -193,15 +252,12 @@ Base.getipaddr
 Base.Libc.getpid
 Base.Libc.time()
 Base.time_ns
-Base.tic
-Base.toc
-Base.toq
 Base.@time
 Base.@timev
 Base.@timed
 Base.@elapsed
 Base.@allocated
-Base.EnvHash
+Base.EnvDict
 Base.ENV
 Base.Sys.isunix
 Base.Sys.isapple
@@ -235,12 +291,12 @@ Core.InterruptException
 Base.KeyError
 Base.LoadError
 Base.MethodError
+Base.MissingException
 Base.NullException
 Core.OutOfMemoryError
 Core.ReadOnlyMemoryError
 Core.OverflowError
 Base.ParseError
-Base.ProcessExitedException
 Core.StackOverflowError
 Base.SystemError
 Core.TypeError
@@ -288,10 +344,13 @@ Base.@functionloc
 ```@docs
 Base.gc
 Base.gc_enable
+Meta.lower
+Meta.@lower
+Meta.parse(::AbstractString, ::Int)
+Meta.parse(::AbstractString)
 Base.macroexpand
 Base.@macroexpand
 Base.@macroexpand1
-Base.expand
 Base.code_lowered
 Base.@code_lowered
 Base.code_typed

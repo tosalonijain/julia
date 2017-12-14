@@ -100,7 +100,7 @@ parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 _maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val(1))
 _maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val(1))
 _maybe_reshape_parent(A::AbstractArray{<:Any,N}, ::NTuple{N, Bool}) where {N} = A
-_maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val(N)) # TODO: DEPRECATE FOR #14770
+_maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val(N))
 """
     view(A, inds...)
 
@@ -116,12 +116,12 @@ julia> A = [1 2; 3 4]
  3  4
 
 julia> b = view(A, :, 1)
-2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
  0
  0
 
@@ -255,7 +255,7 @@ strides(V::SubArray) = substrides(V.parent, V.indexes)
 
 substrides(parent, I::Tuple) = substrides(1, parent, 1, I)
 substrides(s, parent, dim, ::Tuple{}) = ()
-substrides(s, parent, dim, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
+substrides(s, parent, dim, I::Tuple{ScalarIndex, Vararg{Any}}) = (substrides(s*size(parent, dim), parent, dim+1, tail(I))...,)
 substrides(s, parent, dim, I::Tuple{Slice, Vararg{Any}}) = (s, substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{AbstractRange, Vararg{Any}}) = (s*step(I[1]), substrides(s*size(parent, dim), parent, dim+1, tail(I))...)
 substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("strides is invalid for SubArrays with indices of type $(typeof(I[1]))"))
@@ -355,7 +355,7 @@ end
 # deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)
-    dimindex = Vector{Int}(nd)
+    dimindex = Vector{Int}(uninitialized, nd)
     sp = strides(s.parent)
     sv = strides(s)
     j = 1
@@ -453,12 +453,12 @@ julia> A = [1 2; 3 4]
  3  4
 
 julia> b = @view A[:, 1]
-2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
  1
  3
 
 julia> fill!(b, 0)
-2-element SubArray{Int64,1,Array{Int64,2},Tuple{Base.Slice{Base.OneTo{Int64}},Int64},true}:
+2-element view(::Array{Int64,2}, :, 1) with eltype Int64:
  0
  0
 
