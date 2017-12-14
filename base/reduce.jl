@@ -72,7 +72,7 @@ function mapfoldl(f, op, itr)
         return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
     end
     (x, i) = next(itr, i)
-    v0 = mapreduce_single(f, op, x)
+    v0 = mapreduce_first(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
 
@@ -141,7 +141,7 @@ function mapfoldr(f, op, itr)
     if isempty(itr)
         return Base.mapreduce_empty_iter(f, op, itr, iteratoreltype(itr))
     end
-    return mapfoldr_impl(f, op, mapreduce_single(f, op, itr[i]), itr, i-1)
+    return mapfoldr_impl(f, op, mapreduce_first(f, op, itr[i]), itr, i-1)
 end
 
 """
@@ -182,7 +182,7 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 @noinline function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
         @inbounds a1 = A[ifirst]
-        return mapreduce_single(f, op, a1)
+        return mapreduce_first(f, op, a1)
     elseif ifirst + blksize > ilast
         # sequential portion
         @inbounds a1 = A[ifirst]
@@ -294,35 +294,39 @@ mapreduce_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 # handling of single-element iterators
 """
-    Base.reduce_single(f, op, x)
+    Base.reduce_first(op, x)
 
-The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
-[`mapfoldr`](@ref) with reduction `op` over an iterator which contains a single element
-`x`.
+The value to be returned when calling [`reduce`](@ref), [`foldl`](@ref`) or
+[`foldr`](@ref) with reduction `op` over an iterator which contains a single element
+`x`. This value may also used to initialise the recursion, so that `reduce(op, [x, y])`
+may call `op(reduce_first(op, x), y)`.
 
-The default is `x`.
+The default is `x` for most types. The main purpose is to ensure type stability, so
+additional methods should only be defined for cases where `op` gives a result with
+different types than its inputs.
 """
-reduce_single(op, x) = x
-reduce_single(::typeof(+), x::Bool) = Int(x)
-reduce_single(::typeof(*), x::Char) = string(x)
+reduce_first(op, x) = x
+reduce_first(::typeof(+), x::Bool) = Int(x)
+reduce_first(::typeof(*), x::Char) = string(x)
 
-reduce_single(::typeof(add_sum), x) = reduce_single(+, x)
-reduce_single(::typeof(add_sum), x::SmallSigned)   = Int(x)
-reduce_single(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
-reduce_single(::typeof(mul_prod), x) = reduce_single(*, x)
-reduce_single(::typeof(mul_prod), x::SmallSigned)   = Int(x)
-reduce_single(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
+reduce_first(::typeof(add_sum), x::SmallSigned)   = Int(x)
+reduce_first(::typeof(add_sum), x::SmallUnsigned) = UInt(x)
+reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
+reduce_first(::typeof(mul_prod), x::SmallSigned)   = Int(x)
+reduce_first(::typeof(mul_prod), x::SmallUnsigned) = UInt(x)
 
 """
-    Base.mapreduce_single(f, op, x)
+    Base.mapreduce_first(f, op, x)
 
 The value to be returned when calling [`mapreduce`](@ref), [`mapfoldl`](@ref`) or
 [`mapfoldr`](@ref) with map `f` and reduction `op` over an iterator which contains a
-single element `x`.
+single element `x`. This value may also used to initialise the recursion, so that
+`mapreduce(f, op, [x, y])` may call `op(reduce_first(op, f, x), f(y))`.
 
-The default is `reduce_single(op, f(x))`.
+The default is `reduce_first(op, f(x))`.
 """
-mapreduce_single(f, op, x) = reduce_single(op, f(x))
+mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
@@ -333,7 +337,7 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
         return mapreduce_empty(f, op, T)
     elseif n == 1
         @inbounds a1 = A[inds[1]]
-        return mapreduce_single(f, op, a1)
+        return mapreduce_first(f, op, a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
         @inbounds i = inds[1]
         @inbounds a1 = A[i]
@@ -352,7 +356,7 @@ end
 _mapreduce(f, op, ::IndexCartesian, A::AbstractArray) = mapfoldl(f, op, A)
 
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
-mapreduce(f, op, a::Number) = mapreduce_single(f, op, a)
+mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
 """
     reduce(op, v0, itr)
@@ -491,7 +495,7 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
                         A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     @inbounds a1 = A[first]
-    v = mapreduce_single(f, op, a1)
+    v = mapreduce_first(f, op, a1)
     i = first + 1
     while (v == v) && (i <= last)
         @inbounds ai = A[i]

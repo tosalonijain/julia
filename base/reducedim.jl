@@ -145,9 +145,9 @@ let
         [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
 
     global reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region) =
-        reducedim_initarray(A, region, mapreduce_single(f, op, zero(eltype(A))))
+        reducedim_initarray(A, region, mapreduce_first(f, op, zero(eltype(A))))
     global reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::T, region) =
-        reducedim_initarray(A, region, mapreduce_single(f, op, one(eltype(A))))
+        reducedim_initarray(A, region, mapreduce_first(f, op, one(eltype(A))))
 end
 
 ## generic (map)reduction
