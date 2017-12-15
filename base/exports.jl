@@ -537,8 +537,6 @@ export
     occursin,
     match,
     matchall,
-    rsearchindex,
-    searchindex,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,

@@ -6,7 +6,7 @@ function findnext(pred::EqualTo{Char}, s::String, i::Integer)
         throw(BoundsError(s, i))
     end
     @inbounds isvalid(s, i) || string_index_err(s, i)
-    c = pred.x    
+    c = pred.x
     c ≤ '\x7f' && return _search(s, c % UInt8, i)
     while true
         i = _search(s, first_utf8_byte(c), i)
@@ -146,8 +146,11 @@ end
 _nthbyte(s::String, i) = codeunit(s, i)
 _nthbyte(a::ByteArray, i) = a[i]
 
-_searchindex(s::String, t::String, i::Integer) =
+function _searchindex(s::String, t::String, i::Integer)
+    # Check for fast case of a single byte
+    endof(t) == 1 && return findnext(equalto(t[1]), s, i)
     _searchindex(Vector{UInt8}(s), Vector{UInt8}(t), i)
+end
 
 function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
     n = sizeof(t)
@@ -210,43 +213,10 @@ function _searchindex(s::ByteArray, t::ByteArray, i::Integer)
     0
 end
 
-searchindex(s::ByteArray, t::ByteArray, i::Integer) = _searchindex(s,t,i)
-
-"""
-    searchindex(s::AbstractString, substring, [start::Integer])
-
-Similar to `search`, but return only the start index at which
-the substring is found, or `0` if it is not.
-
-# Examples
-```jldoctest
-julia> searchindex("Hello to the world", "z")
-0
-
-julia> searchindex("JuliaLang","Julia")
-1
-
-julia> searchindex("JuliaLang","Lang")
-6
-```
-"""
-searchindex(s::AbstractString, t::AbstractString, i::Integer) = _searchindex(s,t,i)
-searchindex(s::AbstractString, t::AbstractString) = searchindex(s,t,start(s))
-searchindex(s::AbstractString, c::Char, i::Integer) = _searchindex(s,c,i)
-searchindex(s::AbstractString, c::Char) = searchindex(s,c,start(s))
-
-function searchindex(s::String, t::String, i::Integer=1)
-    # Check for fast case of a single byte
-    # (for multi-byte UTF-8 sequences, use searchindex on byte arrays instead)
-    if endof(t) == 1
-        findnext(equalto(t[1]), s, i)
-    else
-        _searchindex(s, t, i)
-    end
-end
-
-function _search(s, t, i::Integer)
-    idx = searchindex(s,t,i)
+function _search(s::Union{AbstractString,ByteArray},
+                 t::Union{AbstractString,Char,Int8,UInt8},
+                 i::Integer)
+    idx = _searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
     else
@@ -281,8 +251,6 @@ julia> findnext("Julia", "JuliaLang", 2)
 ```
 """
 findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
-# TODO: remove?
-findnext(t::ByteArray, s::ByteArray, i::Integer) = _search(s, t, i)
 
 """
     findlast(pattern::AbstractString, string::AbstractString)
@@ -353,8 +321,21 @@ function _rsearchindex(s::AbstractString,
     end
 end
 
-_rsearchindex(s::String, t::String, i::Integer) =
-    _rsearchindex(Vector{UInt8}(s), Vector{UInt8}(t), i)
+function _rsearchindex(s::String, t::String, i::Integer)
+    # Check for fast case of a single byte
+    if endof(t) == 1
+        return findprev(equalto(t[1]), s, i)
+    elseif endof(t) != 0
+        j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
+        return _rsearchindex(Vector{UInt8}(s), Vector{UInt8}(t), j)
+    elseif i > sizeof(s)
+        return 0
+    elseif i == 0
+        return 1
+    else
+        return i
+    end
+end
 
 function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
     n = sizeof(t)
@@ -417,54 +398,10 @@ function _rsearchindex(s::ByteArray, t::ByteArray, k::Integer)
     0
 end
 
-rsearchindex(s::ByteArray, t::ByteArray, i::Integer) = _rsearchindex(s,t,i)
-
-"""
-    rsearchindex(s::AbstractString, substring, [start::Integer])
-
-Similar to `rsearch`, but return only the start index at which the substring is found, or `0` if it is not.
-
-# Examples
-```jldoctest
-julia> rsearchindex("aaabbb","b")
-6
-
-julia> rsearchindex("aaabbb","a")
-3
-```
-"""
-rsearchindex(s::AbstractString, t::AbstractString, i::Integer) = _rsearchindex(s,t,i)
-rsearchindex(s::AbstractString, t::AbstractString) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
-
-function rsearchindex(s::String, t::String)
-    # Check for fast case of a single byte
-    # (for multi-byte UTF-8 sequences, use rsearchindex instead)
-    if endof(t) == 1
-        findprev(equalto(t[1]), s)
-    else
-        _rsearchindex(s, t, sizeof(s))
-    end
-end
-
-function rsearchindex(s::String, t::String, i::Integer)
-    # Check for fast case of a single byte
-    # (for multi-byte UTF-8 sequences, use rsearchindex instead)
-    if endof(t) == 1
-        findprev(equalto(t[1]), s, i)
-    elseif endof(t) != 0
-        j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
-        _rsearchindex(s, t, j)
-    elseif i > sizeof(s)
-        return 0
-    elseif i == 0
-        return 1
-    else
-        return i
-    end
-end
-
-function _rsearch(s, t, i::Integer)
-    idx = rsearchindex(s,t,i)
+function _rsearch(s::Union{AbstractString,ByteArray},
+                  t::Union{AbstractString,Char,Int8,UInt8},
+                  i::Integer)
+    idx = _rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
     else
@@ -499,8 +436,6 @@ julia> findprev("Julia", "JuliaLang", 6)
 ```
 """
 findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, i)
-# TODO: remove?
-findprev(t::ByteArray, s::ByteArray, i::Integer) = _rsearch(s, t, i)
 
 """
     contains(haystack::AbstractString, needle::Union{AbstractString,Char})
@@ -513,6 +448,7 @@ julia> contains("JuliaLang is pretty cool!", "Julia")
 true
 ```
 """
-contains(haystack::AbstractString, needle::Union{AbstractString,Char}) = searchindex(haystack,needle)!=0
+contains(haystack::AbstractString, needle::Union{AbstractString,Char}) =
+    _searchindex(haystack, needle, start(haystack)) != 0
 
 in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")
