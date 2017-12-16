@@ -377,7 +377,7 @@ let a = Expr(:quote,Expr(:$,:x8d003))
 end
 
 # issue #9865
-@test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
+@test contains(replstr(Set(1:100)), r"^Set\(\[.+….+\]\)$")
 
 # issue #11413
 @test string(:(*{1, 2})) == "*{1, 2}"
@@ -725,7 +725,7 @@ BreakDump17529{T} = Union{T, Void}
 VectorVI{I, VI<:AbstractVector{I}} = Vector{VI}
 let repr = sprint(dump, Any)
     @test length(repr) > 100000
-    @test ismatch(r"^Any\n  [^ \t\n]", repr)
+    @test contains(repr, r"^Any\n  [^ \t\n]")
     @test endswith(repr, '\n')
     @test contains(repr, "     Base.Vector{T} = Array{T,1}\n")
     @test contains(repr, ".VectorVI{I, VI<:AbstractArray{I,1}} = Array{VI,1}\n")
