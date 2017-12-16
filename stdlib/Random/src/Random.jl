@@ -32,6 +32,11 @@ abstract type AbstractRNG end
 
 defaultRNG() = GLOBAL_RNG
 
+### Crand from Base
+
+Base.Crand(::Type{UInt32}) = rand(UInt32)
+Base.Crand(::Type{Float64}) = rand(Float64)
+
 ### integers
 
 # we define types which encode the generation of a specific number of bits

@@ -458,14 +458,19 @@ include("docs/Docs.jl")
 using .Docs, .Markdown
 isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 
+#= The following Crand function is not statistically good enough to meet the
+   requirements in test/error.jl, so we still have to depend on Random
 # RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
 Crand() = ccall(:rand, Cuint, ())
 Crand(::Type{UInt32}) = ((Crand() % UInt32) << 16) ⊻ (Crand() % UInt32)
 Crand(::Type{Float64}) = Crand(UInt32) / 2^32
+=#
+
+function Crand end
 
 function __init__()
     # for the few uses of Crand in Base:
-    ccall(:srand, Void, (Cuint,), floor(time()))
+    # ccall(:srand, Void, (Cuint,), floor(time()))
     # Base library init
     reinit_stdio()
     global_logger(SimpleLogger(STDERR))
