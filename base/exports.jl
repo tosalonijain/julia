@@ -524,7 +524,6 @@ export
     find,
     findfirst,
     findlast,
-    findin,
     findmax,
     findmin,
     findmin!,
