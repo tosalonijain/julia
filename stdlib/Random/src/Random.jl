@@ -34,8 +34,8 @@ defaultRNG() = GLOBAL_RNG
 
 ### Crand from Base
 
-Base.Crand(::Type{UInt32}) = rand(UInt32)
-Base.Crand(::Type{Float64}) = rand(Float64)
+#Base.Crand(::Type{UInt32}) = rand(UInt32)
+#Base.Crand(::Type{Float64}) = rand(Float64)
 
 ### integers
 
