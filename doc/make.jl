@@ -34,7 +34,7 @@ if Sys.iswindows()
     cp_q("../stdlib/Unicode/docs/src/index.md",               "src/stdlib/unicode.md")
     cp_q("../stdlib/Distributed/docs/src/index.md",           "src/stdlib/distributed.md")
     cp_q("../stdlib/Printf/docs/src/index.md",                "src/stdlib/printf.md")
-    cp_q("../stdlib/Random/docs/src/index.md",                "src/stdlib/random.md")
+#    cp_q("../stdlib/Random/docs/src/index.md",                "src/stdlib/random.md")
 else
     symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md",        "src/stdlib/delimitedfiles.md")
     symlink_q("../../../stdlib/Test/docs/src/index.md",                  "src/stdlib/test.md")
