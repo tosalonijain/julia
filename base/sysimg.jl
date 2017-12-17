@@ -452,6 +452,9 @@ include("repl/REPL.jl")
 # deprecated functions
 include("deprecated.jl")
 
+# Next module
+include("future.jl")
+
 # Some basic documentation
 include("docs/basedocs.jl")
 
