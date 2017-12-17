@@ -581,6 +581,7 @@ let
             """
             __precompile__(true)
             module $ModuleA
+                import Distributed: myid
                 export f
                 f() = myid()
             end
