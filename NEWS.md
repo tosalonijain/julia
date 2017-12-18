@@ -452,6 +452,10 @@ Library improvements
     defined, linear-algebra function `transpose`. Similarly,
     `permutedims(v::AbstractVector)` will create a row matrix ([#24839]).
 
+  * A new `replace(A, old=>new)` function is introduced to replace `old` by `new` in
+    collection `A`. There are also two other methods with a different API, and
+    a mutating variant, `replace!` ([#22324]).
+
   * `CartesianRange` changes ([#24715]):
     - Inherits from `AbstractArray`, and linear indexing can be used to provide
       linear-to-cartesian conversion ([#24715])
@@ -579,8 +583,9 @@ Deprecated or removed
 
   * `?` can no longer be used as an identifier name ([#22712])
 
-  * The method `replace(s::AbstractString, pat, r, count)` with `count <= 0` is deprecated
-    in favor of `replace(s::AbstractString, pat, r, typemax(Int))` ([#22325]).
+  * The method `replace(s::AbstractString, pat, r, [count])` is deprecated
+    in favor of `replace(s::AbstractString, pat => r; [count])` ([#25165]).
+    Moreover, `count` cannot be negative anymore (use `typemax(Int)` instead ([#22325]).
 
   * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
 
